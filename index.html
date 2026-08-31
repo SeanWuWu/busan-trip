@@ -2,8 +2,10 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%8A%3C/text%3E%3C/svg%3E">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Busan 5D4N">
 <meta name="theme-color" content="#EAF3F6">
@@ -682,7 +684,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 <style>
   * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
   html { scroll-behavior: smooth; }
-  body { margin: 0; background: linear-gradient(180deg, #0C4257 0%, #08303F 100%); background-attachment: fixed; font-family: "Noto Sans TC", system-ui, sans-serif; color: #23262B; overscroll-behavior-y: none; }
+  body { margin: 0; background: linear-gradient(180deg, #0C4257 0%, #08303F 100%); background-attachment: fixed; font-family: "Noto Sans TC", system-ui, "PingFang TC", "Microsoft JhengHei", "Heiti TC", sans-serif; color: #23262B; overscroll-behavior-y: none; }
   input, textarea, select, button { font-family: inherit; font-size: 16px; }
   ::-webkit-scrollbar { width: 0; height: 0; }
   .leaflet-popup-content-wrapper { border-radius: 14px; box-shadow: 0 10px 30px rgba(35,38,43,.18); }
@@ -732,6 +734,11 @@ const CAT = {
 };
 
 const TRIP_YEAR = 2026;
+/* 航班資訊集中一處，改期只要改這裡（行程卡片與 Day5 都讀這份） */
+const FLIGHTS = {
+  out:  { date: "09/04", no: "BX 794", text: "桃園 TPE 13:25 ➔ 釜山 PUS 17:00" },
+  back: { date: "09/08", no: "BX 791", text: "釜山 PUS 15:00 ➔ 桃園 TPE 16:40" }
+};
 const pad2 = n => (n < 10 ? "0" : "") + n;
 const todayISO = () => { const d = new Date(); return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); };
 const WCODE = c => c === 0 ? "晴" : c <= 2 ? "多雲時晴" : c === 3 ? "陰" : c <= 48 ? "起霧" : c <= 57 ? "毛毛雨" : c <= 67 ? "下雨" : c <= 77 ? "下雪" : c <= 82 ? "陣雨" : c <= 86 ? "陣雪" : "雷雨";
@@ -739,16 +746,16 @@ const WCODE = c => c === 0 ? "晴" : c <= 2 ? "多雲時晴" : c === 3 ? "陰" :
 const PLACES = [
   { id: "hotel", name: "麗尼斯飯店 西面", kr: "레니스호텔 서면", cat: "stay", ll: [35.1567, 129.0594], desc: "四晚基地。地鐵西面站 7 號出口步行 3 分鐘，樓下就是不夜的西面街區。" },
   { id: "underground", name: "西面地下街", kr: "서면지하상가", cat: "shop", ll: [35.1580, 129.0592], desc: "連通地鐵站的平價服飾襪子小物。下雨或太熱時整段都在室內，很適合殺時間。" },
-  { id: "oliveyoung", name: "Olive Young 西面旗艦店", kr: "올리브영 서면", cat: "shop", ll: [35.1571, 129.0603], desc: "美妝面膜補貨大本營。店內可退稅（同店滿 ₩30,000 起），營業到深夜 22:30 左右。" },
+  { id: "oliveyoung", name: "Olive Young 西面旗艦店", kr: "올리브영 서면", cat: "shop", ll: [35.1571, 129.0603], desc: "美妝面膜補貨大本營。店內可退稅（同店同日滿 ₩15,000 起），營業到深夜 22:30 左右。" },
   { id: "samgyeop", name: "西面巷弄 炭火烤五花", kr: "서면 삼겹살골목", cat: "food", ll: [35.1545, 129.0609], desc: "整條巷子都是炭火五花。兩人份 2 人份＋大醬湯剛好，肉都由店員代烤代剪。19:00 後要排隊，18:30 前進場最順。" },
   { id: "nakgopsae", name: "辣炒章魚牛腸蝦（開心屋）", kr: "개미집 낙곱새", cat: "food", ll: [35.1553, 129.0603], desc: "釜山名物낙곱새：章魚、牛小腸、鮮蝦一鍋辣炒，最後加白飯炒成鍋巴。辣度可以請店員調（순한맛＝小辣）。" },
   { id: "songjeong", name: "松亭三代豬肉湯飯", kr: "송정3대국밥", cat: "food", ll: [35.1523, 129.0594], desc: "西面湯飯街的老店，湯頭乳白不腥。桌上加蝦醬（새우젓）與韭菜才是本地吃法，24 小時營業。" },
   { id: "chicken", name: "西面炸雞＋啤酒（宵夜外帶）", kr: "서면 치킨", ll: [35.1562, 129.0600], cat: "food", desc: "西面站周邊 교촌／네네／BHC 都有店面，可外帶回飯店。半半（반반）＝原味加調味各半，最保險。" },
   { id: "hanwoo", name: "西面韓牛燒肉／一隻雞", kr: "서면 한우 · 닭한마리", cat: "food", ll: [35.1540, 129.0620], desc: "想吃好一點的一晚。韓牛推薦點肋眼＋牛胸肉拼盤；一隻雞是整隻雞燉湯後加刀削麵，兩人份剛好。" },
   { id: "gopchang", name: "西面炭火烤牛腸／排骨", kr: "서면 곱창 · 갈비", cat: "food", ll: [35.1549, 129.0615], desc: "回程日前一晚的收尾。烤牛腸（곱창）建議搭生菜與大醬，膩了就轉排骨。" },
-  { id: "huinnyeoul", name: "白淺灘文化村", kr: "흰여울문화마을", cat: "sight", ll: [35.0783, 129.0165], desc: "影島懸崖上的白牆聚落。從絕影海岸散步道走進去約 40 分鐘，路窄且有階梯，穿好走的鞋。平日幾乎沒有觀光團。" },
-  { id: "aether", name: "Aether 白淺灘海景咖啡", kr: "에테르 흰여울", cat: "cafe", ll: [35.0776, 129.0158], desc: "白淺灘一線海景，落地窗正對外海與貨船。二樓靠窗位置最搶手，人少時段是平日 13:00–15:00。" },
-  { id: "havingmoment", name: "Having Moment", kr: "해빙모먼트", cat: "cafe", ll: [35.0779, 129.0170], desc: "同一條路上的另一間海景咖啡，座位間距寬、適合久坐。招牌是手沖與司康。" },
+  { id: "huinnyeoul", name: "白淺灘文化村", kr: "흰여울문화마을", cat: "sight", ll: [35.0778, 129.0453], desc: "影島懸崖上的白牆聚落。從絕影海岸散步道走進去約 40 分鐘，路窄且有階梯，穿好走的鞋。平日幾乎沒有觀光團。" },
+  { id: "aether", name: "Aether 白淺灘海景咖啡", kr: "에테르 흰여울", cat: "cafe", ll: [35.0771, 129.0447], desc: "白淺灘一線海景，落地窗正對外海與貨船。二樓靠窗位置最搶手，人少時段是平日 13:00–15:00。" },
+  { id: "havingmoment", name: "Having Moment", kr: "해빙모먼트", cat: "cafe", ll: [35.0775, 129.0459], desc: "同一條路上的另一間海景咖啡，座位間距寬、適合久坐。招牌是手沖與司康。" },
   { id: "haenyeo", name: "影島海女村（現撈海鮮）", kr: "영도 해녀촌", cat: "food", ll: [35.0800, 129.0722], desc: "海邊石灘上的海女攤，現撈現切。必點生海膽（성게）＋紫菜飯捲、現切鮑魚／海螺、海鮮拉麵。現金為主，價格先問清楚再點。" },
   { id: "gwangalli", name: "廣安里海水浴場", kr: "광안리해수욕장", cat: "sight", ll: [35.1531, 129.1186], desc: "廣安大橋夜景第一排。週末晚間常有無人機秀（約 20:00 前後，會依天候取消），沙灘東側視野最好。" },
   { id: "millac", name: "Millac The Market", kr: "밀락더마켓", cat: "shop", ll: [35.1524, 129.1290], desc: "海邊的複合文創市集：選物、小吃、酒吧與大片面海座位。全室內有冷氣，雨天或大太陽都能待。" },
@@ -756,11 +763,11 @@ const PLACES = [
   { id: "gwangcafe", name: "廣安里海景第一排咖啡", kr: "광안리 오션뷰 카페", cat: "cafe", ll: [35.1537, 129.1173], desc: "沿海路整排都是頂樓海景咖啡。日落前 40 分鐘進場，剛好坐到橋燈亮起。" },
   { id: "jeonpo", name: "田浦工具街 文青商圈", kr: "전포카페거리", cat: "cafe", ll: [35.1546, 129.0655], desc: "鐵工廠改造的獨立咖啡與選物店，巷子密、店挨著店。週日部分小店休息，招牌看 Instagram 比 Google 準。" },
   { id: "momos", name: "Momos Coffee", kr: "모모스커피", cat: "cafe", ll: [35.2209, 129.0866], desc: "世界咖啡師冠軍的本店（溫泉場站旁）。手沖與豆子都值得，台灣人常買豆當伴手禮。距西面約 20 分鐘車程。" },
-  { id: "waveon", name: "WAVE ON COFFEE", kr: "웨이브온 커피", cat: "cafe", ll: [35.2337, 129.2260], desc: "機張海邊的大型海景名店，清水模建築正對太平洋。離市區遠（車程約 50 分），適合半天行程。" },
+  { id: "waveon", name: "WAVE ON COFFEE", kr: "웨이브온 커피", cat: "cafe", ll: [35.3223, 129.2698], desc: "機張海邊的大型海景名店，清水模建築正對太平洋。離市區遠（車程約 50 分），適合半天行程。" },
   { id: "ops", name: "OPS 麵包店（南川本店）", kr: "옵스 남천점", cat: "bread", ll: [35.1279, 129.1103], desc: "釜山最有名的麵包店。招牌 학원전（奶油夾心）與栗子塔，下午常缺貨，建議中午前買。廣安里順路。" },
   { id: "baekgudang", name: "白狗堂 Baekgudang", kr: "백구당", cat: "bread", ll: [35.1023, 129.0356], desc: "1959 年開到現在的中央洞老麵包店。招牌是奶油捲與蔬菜麵包，適合當返台前一天的伴手禮。" },
   { id: "samjin", name: "三進魚板（影島本店）", kr: "삼진어묵", cat: "bread", ll: [35.0918, 129.0429], desc: "釜山魚板始祖，現炸魚板可當點心，也有真空包裝可帶回台灣。影島本店二樓有體驗館。" },
-  { id: "songdo", name: "松島海上纜車 / 天空步道", kr: "송도해상케이블카", cat: "sight", ll: [35.0765, 129.0197], desc: "水晶車廂橫越海灣，配一段架在海面上的雲端散步道。平日免排隊，日落前一小時上去最漂亮，強風會停駛。" },
+  { id: "songdo", name: "松島海上纜車 / 天空步道", kr: "송도해상케이블카", cat: "sight", ll: [35.0763, 129.0235], desc: "水晶車廂橫越海灣，配一段架在海面上的雲端散步道。平日免排隊，日落前一小時上去最漂亮，強風會停駛。" },
   { id: "spaland", name: "Spa Land 汗蒸幕", kr: "스파랜드 신세계", cat: "sight", ll: [35.1690, 129.1300], desc: "新世界 Centum City 內的溫泉汗蒸幕：13 種溫泉池與多間主題汗蒸房。限時 4 小時，浴巾衣物都含，不需自備。" },
   { id: "centum", name: "新世界 Centum City", kr: "신세계 센텀시티", cat: "shop", ll: [35.1697, 129.1305], desc: "全世界最大百貨。地下美食街與樓上韓定食都好用，雨天備案首選，退稅櫃台在地下一樓。" },
   { id: "haeundae", name: "海雲台海水浴場", kr: "해운대해수욕장", cat: "sight", ll: [35.1587, 129.1604], desc: "寬闊沙灘與海岸散步道。想避開人潮就往冬柏島方向走，那一段安靜很多。" },
@@ -809,7 +816,7 @@ const DAYS = [
       { t: "09:30", pid: "toast", cat: "cafe", title: "咖啡與現烤吐司早餐", desc: "" },
       { t: "11:00", pid: "oliveyoung", cat: "shop", title: "西面商圈／超市補伴手禮", desc: "" },
       { t: "12:30", pid: "gimhae", cat: "sight", title: "退房，搭車前往金海機場", desc: "" },
-      { t: "15:00", pid: null, cat: "sight", title: "BX 791 返台", desc: "15:00 PUS ➔ 16:40 TPE" }
+      { t: "15:00", pid: null, cat: "sight", title: "BX 791 返台", desc: "PUS 15:00 ➔ TPE 16:40" }
     ] }
 ];
 
@@ -840,13 +847,13 @@ const DISTRICTS = [
   { label: "西面", kr: "서면", ll: [35.1568, 129.0596], z: 15 },
   { label: "廣安里", kr: "광안리", ll: [35.1531, 129.1186], z: 15 },
   { label: "海雲台", kr: "해운대", ll: [35.1587, 129.1604], z: 14 },
-  { label: "白淺灘 / 影島", kr: "흰여울", ll: [35.0783, 129.0165], z: 15 },
-  { label: "松島", kr: "송도", ll: [35.0765, 129.0197], z: 14 },
+  { label: "白淺灘 / 影島", kr: "흰여울", ll: [35.0778, 129.0453], z: 15 },
+  { label: "松島", kr: "송도", ll: [35.0763, 129.0235], z: 14 },
   { label: "南浦 / 札嘎其", kr: "남포", ll: [35.0977, 129.0301], z: 15 },
   { label: "田浦", kr: "전포", ll: [35.1546, 129.0655], z: 16 },
   { label: "金海機場", kr: "김해공항", ll: [35.1795, 128.9382], z: 14 },
   { label: "溫泉場", kr: "온천장", ll: [35.2205, 129.0860], z: 15 },
-  { label: "機張", kr: "기장", ll: [35.2337, 129.2260], z: 14 },
+  { label: "機張", kr: "기장", ll: [35.3223, 129.2698], z: 13 },
   { label: "全釜山", kr: "부산 전체", ll: [35.13, 129.06], z: 11 }
 ];
 
@@ -867,8 +874,8 @@ const METRO = [
   { to: "影島 海女村", ll: [35.0800, 129.0722], via: "計程車較快（約 ₩12,000）", min: "約 25 分" },
   { to: "民樂洞 貝殼街", ll: [35.1516, 129.1249], via: "2 號線 → 金蓮山站 轉步行 15 分", min: "約 20 分" },
   { to: "Momos Coffee 溫泉場", ll: [35.2209, 129.0866], via: "1 號線 → 溫泉場站 1 號出口", min: "約 22 分" },
-  { to: "影島 白淺灘文化村", ll: [35.0783, 129.0165], via: "1 號線南浦站 → 轉 6 / 7 / 9 號公車", min: "約 45 分" },
-  { to: "松島海上纜車", ll: [35.0765, 129.0197], via: "1 號線土城站 → 轉 30 / 71 號公車", min: "約 40 分" },
+  { to: "影島 白淺灘文化村", ll: [35.0778, 129.0453], via: "1 號線南浦站 → 轉 6 / 7 / 9 號公車", min: "約 45 分" },
+  { to: "松島海上纜車", ll: [35.0763, 129.0235], via: "1 號線土城站 → 轉 30 / 71 號公車", min: "約 40 分" },
   { to: "田浦咖啡街", ll: [35.1546, 129.0655], via: "2 號線一站 → 田浦站 7 號出口", min: "約 4 分" },
   { to: "新世界 Centum City", ll: [35.1697, 129.1305], via: "2 號線 → Centum City 站", min: "約 22 分" },
   { to: "金海國際機場", ll: [35.1795, 128.9382], via: "2 號線沙上站 → 轉釜山金海輕軌", min: "約 50 分" }
@@ -893,7 +900,8 @@ const ECATS = [
   { k: "other", label: "其他", color: "#8A6D3F" }
 ];
 
-/* 韓國退稅（2026 規則）：單筆滿 ₩15,000 才可退，實際退回約 6~7%，這裡用 7% 估算。
+/* 韓國退稅（查證於 2026/08/31）：同店同日滿 ₩15,000 可退，實際退回約 5~8%（依品項與級距），
+   這裡用 7% 粗估，僅供抓預算，實際以退稅單為準。
    即時退稅（店家當場退）單筆上限 ₩100 萬、全程 ₩500 萬；超過就得走機場。 */
 const TAX_MIN = 15000;
 const TAX_PCT = 0.07;
@@ -944,7 +952,7 @@ let state = {
   expenses: [], packing: null, updatedAt: 0,
   rate: 41, fxOpen: false, fxKrw: "10000", q: "", poolCat: "all", mapCat: "all",
   addingId: null, editing: null, packInput: "", big: null, me: null, locState: "off",
-  live: null, mapFail: false, ttsErr: false, dragId: null,
+  live: null, mapFail: false, tileFail: false, ttsErr: false, dragId: null,
   form: { name: "", krw: "", cat: "food", tax: null },
   taxOpen: false,
   cfg: { url: "", room: "", me: "" }, syncOn: false, syncState: "off", syncAt: 0,
@@ -953,10 +961,10 @@ let state = {
   syncHelpOpen: false
 };
 
-let map = null, mapEl = null, markers = {}, mapBootTries = 0, pendingFocus = null;
+let map = null, mapEl = null, markers = {}, mapBootTries = 0, pendingFocus = null, meMarker = null;
 let lastDrawnCat = null, tileErrs = 0;
 let drag = null, rafPending = false;
-let syncTimer = null, pushTimer = null, applyingRemote = false;
+let syncTimer = null, pushTimer = null, applyingRemote = false, syncFails = 0;
 let uid = 0;
 function newId(prefix) { uid++; return prefix + Date.now().toString(36) + uid.toString(36); }
 
@@ -964,7 +972,10 @@ function payload() {
   return { checks: state.checks, notes: state.notes, extras: state.extras, edits: state.edits, order: state.order,
     expenses: state.expenses, packing: packList(), rate: state.rate, updatedAt: state.updatedAt };
 }
-function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(payload())); } catch (e) {} }
+function saveLocal() {
+  try { localStorage.setItem(KEY, JSON.stringify(payload())); state.saveErr = false; }
+  catch (e) { state.saveErr = true; }
+}
 function loadLocal() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || "null");
@@ -984,6 +995,8 @@ function loadLocal() {
 function jumpToToday() {
   const iso = todayISO();
   for (let i = 0; i < DAYS.length; i++) { if (dayISO(i) === iso) { state.day = i; return; } }
+  /* 旅程結束後打開就停在最後一天，不要莫名其妙回到 Day 1 */
+  if (iso > dayISO(DAYS.length - 1)) state.day = DAYS.length - 1;
 }
 function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify({ cfg: state.cfg, syncOn: state.syncOn, rateManual: state.rateManual })); } catch (e) {} }
 
@@ -1010,8 +1023,8 @@ async function doPull(force) {
     const res = await fetch(url);
     if (!res.ok) throw new Error("HTTP " + res.status);
     const d = await res.json();
-    if (!d) { state.syncState = "ok"; state.syncAt = Date.now(); LAST_SYNC_ERR = ""; render(); return; }
-    if (!force && !(d.updatedAt > state.updatedAt)) { state.syncState = "ok"; state.syncAt = Date.now(); LAST_SYNC_ERR = ""; render(); return; }
+    if (!d) { syncFails = 0; state.syncState = "ok"; state.syncAt = Date.now(); LAST_SYNC_ERR = ""; render(); return; }
+    if (!force && !(d.updatedAt > state.updatedAt)) { syncFails = 0; state.syncState = "ok"; state.syncAt = Date.now(); LAST_SYNC_ERR = ""; render(); return; }
     applyingRemote = true;
     Object.assign(state, {
       checks: d.checks || {}, notes: d.notes || {}, extras: d.extras || {}, edits: d.edits || {},
@@ -1019,16 +1032,25 @@ async function doPull(force) {
       rate: d.rate || state.rate, updatedAt: d.updatedAt || Date.now(),
       syncState: "ok", syncAt: Date.now()
     });
+    syncFails = 0;
     saveLocal(); render(); applyingRemote = false; LAST_SYNC_ERR = "";
-  } catch (e) { applyingRemote = false; state.syncState = "err"; LAST_SYNC_ERR = "讀取：" + (e && e.message || e); render(); }
+  } catch (e) { applyingRemote = false; syncFails++; state.syncState = "err"; LAST_SYNC_ERR = "讀取：" + (e && e.message || e); render(); }
 }
 function startSync() {
-  clearInterval(syncTimer);
+  clearTimeout(syncTimer);
   if (!state.syncOn) { state.syncState = "off"; render(); return; }
   if (!fbEndpoint()) { state.syncState = "off"; render(); return; }
   state.syncState = "wait"; render();
+  syncFails = 0;
   doPull(false);
-  syncTimer = setInterval(() => { if (!document.hidden) doPull(false); }, 5000);
+  /* 失敗就退避（5→10→20→40，上限 60 秒），省電也少打壞掉的端點 */
+  const tick = () => {
+    const wait = state.syncState === "err"
+      ? Math.min(60000, 5000 * Math.pow(2, Math.min(syncFails, 4)))
+      : 5000;
+    syncTimer = setTimeout(() => { if (!document.hidden) doPull(false); tick(); }, wait);
+  };
+  tick();
 }
 
 /* 每日預報：不指定 start_date/end_date，因為超出預報範圍（16 天）API 會直接回錯誤。
@@ -1084,6 +1106,19 @@ function fetchWeather() {
     }).catch(() => {});
 }
 
+/* Chrome 首次 getVoices() 會回空陣列，等 voiceschanged 才有；先預熱，
+   否則第一次點朗讀會用預設語音念韓文，聽起來完全不對。 */
+function warmVoices() {
+  try {
+    const s = window.speechSynthesis;
+    if (!s) return;
+    s.getVoices();
+    if (typeof s.addEventListener === "function") {
+      s.addEventListener("voiceschanged", () => { s.getVoices(); }, { once: true });
+    }
+  } catch (e) {}
+}
+
 function speak(text) {
   try {
     const s = window.speechSynthesis;
@@ -1101,7 +1136,11 @@ function locate() {
   if (!navigator.geolocation) { state.locState = "err"; render(); return; }
   state.locState = "wait"; render();
   navigator.geolocation.getCurrentPosition(
-    p => { state.me = [p.coords.latitude, p.coords.longitude]; state.locState = "ok"; render(); },
+    p => {
+      state.me = [p.coords.latitude, p.coords.longitude]; state.locState = "ok";
+      if (map) { drawMarkers(); goTo(state.me, 15); }
+      render();
+    },
     () => { state.locState = "err"; render(); },
     { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
   );
@@ -1126,6 +1165,16 @@ function dayItems(di) {
   }
   return list.slice().sort((a, b) => mins(a.t) - mins(b.t));
 }
+/* 新項目的預設時間：接在當天最後一項之後一小時，沒有項目就用 12:00。
+   舊版固定 12:00 或字串「自訂」，會被排到中午或永遠沉到最後。 */
+function nextSlot(di) {
+  const list = dayItems(di).filter(it => mins(it.t) < 9999);
+  if (!list.length) return "12:00";
+  const last = mins(list[list.length - 1].t);
+  const m = Math.min(last + 60, 23 * 60 + 30);
+  return pad2(Math.floor(m / 60)) + ":" + pad2(m % 60);
+}
+
 function patchEdit(id, patch) {
   const ed = state.edits;
   setData({ edits: Object.assign({}, ed, { [id]: Object.assign({}, ed[id], patch) }) });
@@ -1201,7 +1250,7 @@ function ensureMapEl() {
   if (!mapEl) {
     mapEl = document.createElement("div");
     mapEl.id = "mapContainer";
-    mapEl.style.cssText = "height:60vh;min-height:360px;width:100%;border-radius:22px;overflow:hidden;border:1px solid #CFE2EA;background:#DFEAEE;";
+    mapEl.style.cssText = "height:68vh;min-height:420px;width:100%;border-radius:22px;overflow:hidden;border:1px solid #CFE2EA;background:#DFEAEE;";
   }
   return mapEl;
 }
@@ -1228,14 +1277,18 @@ function bootMap() {
   }
   mapBootTries = 0;
   try {
-    map = window.L.map(el, { zoomControl: false, scrollWheelZoom: false, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false })
-      .setView([35.135, 129.07], 11);
-    const tiles = window.L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { attribution: "© OpenStreetMap · CARTO", maxZoom: 19, subdomains: "abcd" });
+    map = window.L.map(el, {
+      zoomControl: false, scrollWheelZoom: true, zoomAnimation: false,
+      fadeAnimation: false, markerZoomAnimation: false,
+      tap: false, touchZoom: true, doubleClickZoom: true, bounceAtZoomLimits: false
+    }).setView([35.135, 129.07], 11);
+    const tiles = window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap", maxZoom: 19 });
     tiles.on("tileerror", () => {
       tileErrs++;
       if (tileErrs === 4 && !state.tileFail) { state.tileFail = true; render(); }
     });
     tiles.on("tileload", () => {
+      tileErrs = 0;
       if (state.tileFail) { state.tileFail = false; render(); }
     });
     tiles.addTo(map);
@@ -1252,13 +1305,24 @@ function drawMarkers() {
   if (!map || !window.L) return;
   Object.values(markers).forEach(m => map.removeLayer(m));
   markers = {};
+  /* 自己的位置也畫上去，逛街時才知道標記在哪一邊 */
+  if (meMarker) { try { map.removeLayer(meMarker); } catch (e) {} meMarker = null; }
+  if (state.me) {
+    meMarker = window.L.marker(state.me, {
+      icon: window.L.divIcon({
+        className: "", iconSize: [22, 22], iconAnchor: [11, 11],
+        html: '<div style="width:22px;height:22px;border-radius:99px;background:#2C7BE5;border:3px solid #fff;box-shadow:0 0 0 4px rgba(44,123,229,.25),0 3px 10px rgba(35,38,43,.3)"></div>'
+      }), zIndexOffset: 1000
+    }).addTo(map);
+    meMarker.bindPopup('<div style="font-size:13px;font-weight:500">我在這裡</div>');
+  }
   const cat = state.mapCat;
   PLACES.filter(p => cat === "all" || p.cat === cat).forEach(p => {
     const c = CAT[p.cat];
     const icon = window.L.divIcon({
-      className: "", iconSize: [30, 30], iconAnchor: [15, 15],
-      html: '<div style="width:30px;height:30px;border-radius:99px;background:' + c.color +
-        ';border:2.5px solid #fff;box-shadow:0 4px 12px rgba(35,38,43,.28);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;font-family:Noto Sans TC,sans-serif">' +
+      className: "", iconSize: [38, 38], iconAnchor: [19, 19],
+      html: '<div style="width:38px;height:38px;border-radius:99px;background:' + c.color +
+        ';border:3px solid #fff;box-shadow:0 4px 14px rgba(35,38,43,.32);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;font-family:Noto Sans TC,sans-serif">' +
         c.label[0] + "</div>"
     });
     const m = window.L.marker(p.ll, { icon }).addTo(map);
@@ -1296,6 +1360,13 @@ function render() {
     restore = { id: active.id, start: active.selectionStart, end: active.selectionEnd };
   }
   root.innerHTML = renderTopBar() + renderTabContent() + renderBigModal() + renderBackupModal() + renderBottomNav();
+  /* 統一補上無障礙屬性，不用在幾十處樣板各寫一次 */
+  root.querySelectorAll("[data-act]").forEach(el => {
+    const tag = el.tagName;
+    if (tag === "A" || tag === "INPUT" || tag === "TEXTAREA") return;
+    if (!el.hasAttribute("role")) el.setAttribute("role", "button");
+    if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "0");
+  });
   if (restore) {
     const el = document.getElementById(restore.id);
     if (el && typeof el.focus === "function") {
@@ -1340,7 +1411,7 @@ function renderTopBar() {
         </div>
         <div data-act="toggleFx" style="display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; background: #0B6E8F; color: #fff; border-radius: 999px; padding: 7px 12px; cursor: pointer;">
           <span style="font-size: 11px; font-weight: 500;">₩${state.rate}</span>
-          <span style="font-size: 8px; letter-spacing: .1em; opacity: .72;">= NT$1</span>
+          <span style="font-size: 8px; letter-spacing: .1em; opacity: .72;">NT$1</span>
         </div>
       </div>
     </div>
@@ -1454,8 +1525,8 @@ function renderItin() {
         <div style="font-size: 11px; letter-spacing: .14em; color: #7E8A8C;">航班與住宿</div>
       </div>
       <div style="display: flex; flex-direction: column; gap: 9px; margin-top: 11px; font-size: 12px; color: #4A4E55; line-height: 1.6;">
-        <div>去程 09/04 · BX 794 · 桃園 TPE 13:25 ➔ 釜山 PUS 17:00</div>
-        <div>回程 09/08 · BX 791 · 釜山 PUS 15:00 ➔ 桃園 TPE 16:40</div>
+        <div>去程 ${FLIGHTS.out.date} · ${FLIGHTS.out.no} · ${FLIGHTS.out.text}</div>
+        <div>回程 ${FLIGHTS.back.date} · ${FLIGHTS.back.no} · ${FLIGHTS.back.text}</div>
         <div>住宿 4 晚 · 西面 麗尼斯飯店 LENITH HOTEL Seomyeon（地鐵西面站 7 號出口）</div>
       </div>
     </div>
@@ -1499,6 +1570,10 @@ function renderMap() {
       <div style="font-size: 12px; color: #7E8A8C; margin-top: 6px;">先跳到區域，再看該區的景點標記。</div>
       <div class="hscroll" style="gap: 7px; margin-top: 13px; padding-bottom: 4px;">${districtChips}</div>
       <div class="hscroll" style="gap: 7px; margin-top: 8px; padding-bottom: 4px;">${catChips}</div>
+      <div style="display: flex; gap: 8px; margin-top: 10px;">
+        <div data-act="locateMe" style="flex: 1; text-align: center; border-radius: 12px; padding: 11px 0; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid #C2DCEA; background: ${state.locState === "ok" ? "#0B6E8F" : "#DDEDF4"}; color: ${state.locState === "ok" ? "#fff" : "#0B6E8F"};">${{ wait: "定位中…", ok: "我的位置", err: "無法定位" }[state.locState] || "定位我的位置"}</div>
+        <div data-act="fitAll" style="flex: 1; text-align: center; border-radius: 12px; padding: 11px 0; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid #C2DCEA; background: #DDEDF4; color: #0B6E8F;">看全部標記</div>
+      </div>
     </div>
     ${state.mapFail ? `<div style="margin: 14px 18px 0; padding: 14px 16px; background: #F2F9FB; border: 1px dashed #B9D5E0; border-radius: 16px; font-size: 12px; color: #7E8A8C; line-height: 1.7;">地圖圖磚載入失敗（可能沒有網路或此環境限制了外部地圖服務）。下方名單與導航按鈕仍可使用。</div>${renderMapFallbackList()}`
       : `${state.tileFail ? `<div style="margin: 14px 18px 0; padding: 12px 14px; background: #F2F9FB; border: 1px dashed #B9D5E0; border-radius: 14px; font-size: 11px; color: #7E8A8C; line-height: 1.7;">地圖底圖圖磚讀取不到（沒有網路，或此環境擋掉了外部圖磚服務）。標記點與導航按鈕仍可正常使用。</div>` : ""}<div id="mapMount" style="margin: 14px 18px 0;"></div>`}
@@ -1605,7 +1680,7 @@ function renderMoney() {
       <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 10px;">
         <span style="font-size: 12px; color: #7E8A8C;">消費 ₩${nf(taxTodoKrw)}</span>
         <span style="font-size: 12px; color: #7E8A8C;">·</span>
-        <span style="font-size: 13px; color: #0B6E8F; font-weight: 500;">約可退 ₩${nf(taxTodoKrw * TAX_PCT)}</span>
+        <span style="font-size: 13px; color: #0B6E8F; font-weight: 500;">約可退 ₩${nf(taxTodoKrw * 0.05)}–${nf(taxTodoKrw * 0.08)}</span>
       </div>
       <div data-act="toggleTaxList" style="margin-top: 10px; font-size: 11px; color: #0B6E8F; cursor: pointer;">${state.taxOpen ? "收起清單 ▲" : "看是哪幾筆 ▼"}</div>
       ${state.taxOpen ? `<div style="margin-top: 6px;">${taxRows}</div>
@@ -1648,7 +1723,7 @@ function renderMoney() {
     <div style="background: linear-gradient(135deg, #0F3A4C 0%, #14586F 100%); color: #fff; border-radius: 22px; padding: 17px 18px 15px; margin-top: 14px; box-shadow: 0 8px 22px rgba(11,61,79,.20);">
       <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px;">
         <span style="font-size: 10px; letter-spacing: .16em; opacity: .62;">總支出</span>
-        <span style="font-size: 10px; opacity: .5;">${state.expenses.length} 筆 · ₩${esc(state.rate)} = NT$1</span>
+        <span style="font-size: 10px; opacity: .5;">${state.expenses.length} 筆 · NT$1 ≈ ₩${esc(state.rate)}</span>
       </div>
       <div style="display: flex; align-items: baseline; gap: 5px; margin-top: 11px;">
         <span style="font-size: 17px; opacity: .75;">₩</span>
@@ -1704,11 +1779,12 @@ function renderTools() {
   </div>`).join("");
 
   const near = state.me ? STATIONS.slice().sort((a, b) => KM(state.me, a.ll) - KM(state.me, b.ll))[0] : null;
-  const origin = state.me ? { ll: state.me, label: "目前位置 · 最近 " + near.name + "（步行約 " + Math.max(1, Math.round(KM(state.me, near.ll) * 13)) + " 分）" } : { ll: [35.1580, 129.0593], label: "以西面站為起點" };
+  const origin = state.me ? { ll: state.me, label: "目前位置 · 最近 " + near.name + "（步行約 " + Math.max(1, Math.round(KM(state.me, near.ll) * 1.35 * 13)) + " 分）" } : { ll: [35.1580, 129.0593], label: "以西面站為起點" };
   const metroRows = METRO.map(m => {
     const km = KM(origin.ll, m.ll);
-    const min = state.me ? "約 " + Math.max(4, Math.round(km * 2.6 + 8)) + " 分" : m.min;
-    const fare = km <= 10 ? "₩1,500" : "₩1,700";
+    /* 定位只用來排序遠近；時間仍用實際查過的路線時間，不用直線距離硬算 */
+    const min = m.min;
+    const fare = km <= 10 ? "₩1,600" : "₩1,800";
     const route = "https://www.google.com/maps/dir/?api=1&travelmode=transit&origin=" + origin.ll[0] + "," + origin.ll[1] + "&destination=" + m.ll[0] + "," + m.ll[1];
     return { m, km, min, fare, route };
   }).sort((a, b) => (state.me ? a.km - b.km : 0));
@@ -1760,6 +1836,7 @@ function renderTools() {
       </div>` : ""}
       <div data-act="openBackup" style="margin-top: 11px; text-align: center; border: 1px dashed #B9D5E0; border-radius: 12px; padding: 10px 0; font-size: 12px; color: #0B6E8F; cursor: pointer;">資料備份 / 還原</div>
       <div style="font-size: 10px; color: #BCC5C6; margin-top: 9px; line-height: 1.6;">出發前與回國後各備份一次比較安心。${LAST_SYNC_ERR ? "錯誤：" + esc(LAST_SYNC_ERR) : ""}</div>
+      ${state.saveErr ? `<div style="margin-top: 9px; padding: 10px 12px; background: #FBF3F1; border: 1px solid #EEDDD8; border-radius: 12px; font-size: 11px; color: #B4654A; line-height: 1.7;">⚠️ 這台裝置無法寫入本機儲存（可能是無痕模式或空間已滿），目前的修改<b>關掉頁面就會不見</b>。請立刻用上方「資料備份」複製一份。</div>` : ""}
     </div>
 
     <div style="background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 20px; padding: 16px; margin-top: 12px;">
@@ -1785,7 +1862,7 @@ function renderTools() {
       <div style="font-size: 11px; color: #7E8A8C; margin-top: 6px; line-height: 1.7;">${origin.label}</div>
       <div data-act="locateMe" style="margin-top: 11px; text-align: center; border-radius: 12px; padding: 10px 0; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid #C2DCEA; background: ${state.locState === "ok" ? "#0B6E8F" : "#DDEDF4"}; color: ${state.locState === "ok" ? "#fff" : "#0B6E8F"};">${{ wait: "定位中…", ok: "重新定位", err: "無法定位，改用西面" }[state.locState] || "用我目前的位置"}</div>
       <div style="display: flex; flex-direction: column; gap: 1px; margin-top: 12px;">${metroHtml}</div>
-      <div style="font-size: 11px; color: #9AA3A5; margin-top: 11px; line-height: 1.7;">單程票 1 區間 ₩1,500 / 2 區間 ₩1,700；交通卡（Cashbee、T-money）票價約便宜 ₩100–200，便利商店可買可加值。一日券 ₩5,500。</div>
+      <div style="font-size: 11px; color: #9AA3A5; margin-top: 11px; line-height: 1.7;">單程票 1 區間 ₩1,700 / 2 區間 ₩1,900；交通卡（Cashbee、T-money）1 區間 ₩1,600 / 2 區間 ₩1,800，便利商店可買可加值。一日券 ₩5,000（限 1–4 號線，轉金海輕軌、東海線要用交通卡）。上表為交通卡價。票價查證於 2026/08/31，現場以站內公告為準。</div>
     </div>
 
     <div style="background: #F2F9FB; border: 1px dashed #B9D5E0; border-radius: 20px; padding: 16px; margin-top: 12px;">
@@ -1866,10 +1943,29 @@ function renderBottomNav() {
 function bindEvents() {
   const root = document.getElementById("app");
   root.addEventListener("click", onClick);
+  /* 這些 div 都是實質上的按鈕，補上 role/tabindex 並讓 Enter/Space 也能觸發 */
+  root.addEventListener("keydown", e => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const el = e.target.closest && e.target.closest("[data-act]");
+    if (!el || el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "A") return;
+    e.preventDefault();
+    el.click();
+  });
   root.addEventListener("pointerdown", onPointerDown);
   root.addEventListener("input", onInput);
   root.addEventListener("change", onInput);
   root.addEventListener("blur", onBlur, true);
+  root.addEventListener("keydown", onKeyDown);
+}
+
+/* Enter 收下編輯、Esc 取消，手機外接鍵盤與桌機都能離開編輯狀態 */
+function onKeyDown(e) {
+  const t = e.target;
+  if (!t || !t.id) return;
+  const isEdit = t.id.indexOf("editTime-") === 0 || t.id.indexOf("editTitle-") === 0;
+  if (!isEdit) return;
+  if (e.key === "Enter") { e.preventDefault(); t.blur(); }
+  else if (e.key === "Escape") { e.preventDefault(); setUI({ editing: null }); }
 }
 
 function onClick(e) {
@@ -1883,34 +1979,55 @@ function onClick(e) {
   switch (act) {
     case "toggleFx": setUI({ fxOpen: !state.fxOpen }); break;
     case "pickDay": setUI({ day: +id }); break;
-    case "addBlank": addExtra(state.day, { t: "12:00", pid: null, cat: "sight", title: "", desc: "" }, { editTitle: true }); break;
+    case "addBlank": addExtra(state.day, { t: nextSlot(state.day), pid: null, cat: "sight", title: "", desc: "" }, { editTitle: true }); break;
     case "toggleSort": { const o = Object.assign({}, state.order); delete o[state.day]; setData({ order: o }); break; }
     case "toggleCheck": setData({ checks: Object.assign({}, state.checks, { [id]: !state.checks[id] }) }); break;
     case "startTimeEdit": setUI({ editing: id + ":time" }); break;
     case "startTitleEdit": setUI({ editing: id + ":title" }); break;
     case "focusOnMap": focusOnMap(id || null); break;
-    case "deleteItem": { const it = dayItems(state.day).find(x => x.id === id); if (it) removeItem(it, state.day); break; }
+    case "deleteItem": {
+      const it = dayItems(state.day).find(x => x.id === id);
+      if (!it) break;
+      /* 自訂項目刪掉就沒有「還原已移除」可救，所以先問一次 */
+      if (it.custom && !window.confirm("刪除「" + (it.title || "這個項目") + "」？自訂項目刪除後無法還原。")) break;
+      removeItem(it, state.day);
+      break;
+    }
     case "restoreHidden": {
       const di = state.day;
       const hiddenIds = Object.keys(state.edits).filter(k => state.edits[k] && state.edits[k].hidden && k.indexOf("d" + di + "-") === 0);
       const ed = Object.assign({}, state.edits);
       hiddenIds.forEach(k => { ed[k] = Object.assign({}, ed[k], { hidden: false }); });
-      setData({ edits: ed });
+      /* 若這天是手動排序，把還原的項目補回 order，否則 ix() 會回 9999 全擠到最後 */
+      const patch = { edits: ed };
+      const ord = state.order[di];
+      if (ord && ord.length) {
+        const add = hiddenIds.filter(k => ord.indexOf(k) < 0);
+        if (add.length) patch.order = Object.assign({}, state.order, { [di]: ord.concat(add) });
+      }
+      setData(patch);
       break;
     }
     case "pickDistrict": { const d = DISTRICTS[+id]; if (d) goTo(d.ll, d.z); break; }
+    case "fitAll": {
+      if (!map || !window.L) break;
+      const pts = PLACES.filter(p => state.mapCat === "all" || p.cat === state.mapCat).map(p => p.ll);
+      if (state.me) pts.push(state.me);
+      if (pts.length) { try { map.fitBounds(window.L.latLngBounds(pts).pad(0.15), { animate: false }); } catch (e) {} }
+      break;
+    }
     case "pickMapCat": setUI({ mapCat: id }); break;
     case "pickPoolCat": setUI({ poolCat: id }); break;
     case "startAdd": setUI({ addingId: state.addingId === id ? null : id }); break;
     case "addToDay": {
       const p = P(id); const di = +el.getAttribute("data-day");
-      if (p) addExtra(di, { t: "自訂", pid: p.id, cat: p.cat, title: p.name, desc: p.desc }, { jump: true });
+      if (p) addExtra(di, { t: nextSlot(di), pid: p.id, cat: p.cat, title: p.name, desc: p.desc }, { jump: true });
       break;
     }
     case "pickExpCat": setUI({ form: Object.assign({}, state.form, { cat: id }) }); break;
     case "addExpense": {
       const krw = parseFloat(String(state.form.krw || "").replace(/,/g, "")) || 0;
-      if (!krw) break;
+      if (!krw) { window.alert("請先輸入金額（只能填數字）。"); break; }
       const exp = { id: newId("e"), name: (state.form.name || "").trim() || "未命名", krw, cat: state.form.cat };
       if (krw >= TAX_MIN && state.form.tax) exp.tax = state.form.tax;
       state.form = Object.assign({}, state.form, { name: "", krw: "", tax: null });
@@ -1926,7 +2043,12 @@ function onClick(e) {
     }
     case "markTaxDone": setData({ expenses: state.expenses.map(x => String(x.id) === String(id) ? Object.assign({}, x, { tax: "done" }) : x) }); break;
     case "markAllTaxDone": setData({ expenses: state.expenses.map(x => x.tax === "todo" ? Object.assign({}, x, { tax: "done" }) : x) }); break;
-    case "deleteExpense": setData({ expenses: state.expenses.filter(x => String(x.id) !== String(id)) }); break;
+    case "deleteExpense": {
+      const ex = state.expenses.find(x => String(x.id) === String(id));
+      if (ex && !window.confirm("刪除「" + ex.name + "」（₩" + nf(ex.krw) + "）？")) break;
+      setData({ expenses: state.expenses.filter(x => String(x.id) !== String(id)) });
+      break;
+    }
     case "togglePack": { const pk = packList(); setData({ packing: pk.map(x => x.id === id ? Object.assign({}, x, { done: !x.done }) : x) }); break; }
     case "deletePack": { const pk = packList(); setData({ packing: pk.filter(x => x.id !== id) }); break; }
     case "addPack": {
@@ -1993,7 +2115,11 @@ function onClick(e) {
       if (state.rateLive) setData({ rate: state.rateLive }); else { render(); fetchRate(); }
       break;
     }
-    case "pickTab": setUI({ tab: id }); break;
+    case "pickTab": {
+      if (id !== state.tab) { try { history.pushState({ tab: id }, ""); } catch (e) {} }
+      setUI({ tab: id });
+      break;
+    }
   }
 }
 
@@ -2019,7 +2145,11 @@ function onInput(e) {
      input 事件已涵蓋所有輸入，change 直接略過。 */
   if (e.type === "change" && (t.id === "expKrwInput" || t.id === "poolSearchInput")) return;
   if (t.id === "fxKrwInput") { state.fxKrw = t.value; render(); return; }
-  if (t.id === "rateInput") { state.rate = t.value; state.rateManual = true; saveCfg(); setData({ rate: t.value }); return; }
+  if (t.id === "rateInput") {
+    const v = parseFloat(String(t.value).replace(/,/g, ""));
+    state.rate = (isFinite(v) && v > 0) ? v : t.value;
+    state.rateManual = true; saveCfg(); setData({ rate: state.rate }); return;
+  }
   if (t.id === "poolSearchInput") { state.q = t.value; document.getElementById("poolList").innerHTML = renderPoolList(); return; }
   if (t.id === "syncUrlInput") { state.cfg = Object.assign({}, state.cfg, { url: t.value }); saveCfg(); return; }
   if (t.id === "syncRoomInput") { state.cfg = Object.assign({}, state.cfg, { room: t.value }); saveCfg(); return; }
@@ -2064,6 +2194,7 @@ function onBlur(e) {
    ============================================================ */
 loadLocal();
 jumpToToday();
+warmVoices();
 bindEvents();
 render();
 fetchWeather();
@@ -2071,6 +2202,57 @@ fetchForecast();
 fetchRate();
 if (state.syncOn) startSync();
 document.addEventListener("visibilitychange", () => { if (!document.hidden && state.syncOn) doPull(false); });
+
+/* ============================================================
+   離線支援：所有資源都內嵌在這一個 HTML，快取它就能完全離線開啟。
+   用 Blob 產生 Service Worker，不需要額外檔案（GitHub Pages 同源可用）。
+   ============================================================ */
+(function registerSW() {
+  if (!("serviceWorker" in navigator)) return;
+  if (location.protocol !== "https:" && location.hostname !== "localhost") return;
+  const SW = `
+    const C = "busan-guide-v1";
+    const PAGE = ${JSON.stringify(location.pathname)};
+    self.addEventListener("install", e => {
+      self.skipWaiting();
+      e.waitUntil(caches.open(C).then(c => c.add(PAGE)).catch(() => {}));
+    });
+    self.addEventListener("activate", e => {
+      e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+    });
+    self.addEventListener("fetch", e => {
+      const r = e.request;
+      if (r.method !== "GET") return;
+      const url = new URL(r.url);
+      // 只處理自己這頁；天氣、匯率、圖磚、Firebase 一律走網路，離線時自然失敗由 App 自行處理
+      if (url.origin !== location.origin) return;
+      if (r.mode === "navigate" || url.pathname === PAGE) {
+        e.respondWith(
+          fetch(r).then(res => {
+            const copy = res.clone();
+            caches.open(C).then(c => c.put(PAGE, copy)).catch(() => {});
+            return res;
+          }).catch(() => caches.match(PAGE).then(m => m || Response.error()))
+        );
+      }
+    });
+  `;
+  try {
+    const url = URL.createObjectURL(new Blob([SW], { type: "text/javascript" }));
+    navigator.serviceWorker.register(url).catch(() => {});
+  } catch (e) {}
+})();
+
+/* #46 手機主畫面模式下，返回鍵應該回上一個分頁而不是直接關掉 App */
+(function tabHistory() {
+  try {
+    history.replaceState({ tab: state.tab }, "");
+    window.addEventListener("popstate", e => {
+      const t = e.state && e.state.tab;
+      if (t && t !== state.tab) { state.tab = t; render(); }
+    });
+  } catch (e) {}
+})();
 </script>
 </body>
 </html>
