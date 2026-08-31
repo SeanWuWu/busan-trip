@@ -893,6 +893,11 @@ const ECATS = [
   { k: "other", label: "其他", color: "#8A6D3F" }
 ];
 
+/* 韓國退稅（2026 規則）：單筆滿 ₩15,000 才可退，實際退回約 6~7%，這裡用 7% 估算。
+   即時退稅（店家當場退）單筆上限 ₩100 萬、全程 ₩500 萬；超過就得走機場。 */
+const TAX_MIN = 15000;
+const TAX_PCT = 0.07;
+
 const KEY = "busan2026.guide.v3";
 const CFG_KEY = "busan2026.sync.cfg.v2";
 
@@ -940,7 +945,8 @@ let state = {
   rate: 41, fxOpen: false, fxKrw: "10000", q: "", poolCat: "all", mapCat: "all",
   addingId: null, editing: null, packInput: "", big: null, me: null, locState: "off",
   live: null, mapFail: false, ttsErr: false, dragId: null,
-  form: { name: "", krw: "", cat: "food" },
+  form: { name: "", krw: "", cat: "food", tax: null },
+  taxOpen: false,
   cfg: { url: "", room: "", me: "" }, syncOn: false, syncState: "off", syncAt: 0,
   forecast: null, fcState: "load", rateManual: false, rateLive: null,
   backupOpen: false, importText: "", importArmed: false, importMsg: "",
@@ -1563,9 +1569,53 @@ function renderPoolList() {
   }).join("");
 }
 
+/* 記帳表單裡的退稅提示：金額沒過門檻就完全不出現，不打擾小額消費 */
+function taxHintHTML() {
+  const krw = parseFloat(String(state.form.krw || "").replace(/,/g, "")) || 0;
+  if (krw < TAX_MIN) return "";
+  const cur = state.form.tax || null;
+  const btn = (k, label) => {
+    const on = cur === k;
+    return `<div data-act="pickFormTax" data-id="${k}" style="flex: 1; text-align: center; border-radius: 10px; padding: 9px 0; font-size: 12px; cursor: pointer; border: 1px solid ${on ? "#0B6E8F" : "#CFE2EA"}; background: ${on ? "#0B6E8F" : "#fff"}; color: ${on ? "#fff" : "#4A4E55"};">${label}</div>`;
+  };
+  return `<div style="margin-top: 10px; padding: 11px 12px; background: #F2F9FB; border: 1px solid #CFE2EA; border-radius: 13px;">
+    <div style="font-size: 11px; color: #4A4E55; line-height: 1.7;">滿 ₩15,000 可退稅，記得跟店員要退稅單</div>
+    <div style="display: flex; gap: 7px; margin-top: 8px;">${btn("todo", "機場再退")}${btn("done", "已當場退")}</div>
+    <div style="font-size: 10px; color: #BCC5C6; margin-top: 7px;">${cur ? "再點一次可取消" : "不用退稅就不用點，直接記一筆"}</div>
+  </div>`;
+}
+
 function renderMoney() {
   const rate = parseFloat(state.rate) || 41;
   const totalKrw = state.expenses.reduce((s, e) => s + e.krw, 0);
+  const taxTodo = state.expenses.filter(e => e.tax === "todo");
+  const taxDone = state.expenses.filter(e => e.tax === "done");
+  const taxTodoKrw = taxTodo.reduce((s, e) => s + e.krw, 0);
+  const taxRows = taxTodo.map(e => `<div style="display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid #DDEDF4;">
+    <div style="flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${esc(e.name)}</div>
+    <div style="font-size: 12px; color: #7E8A8C;">₩${nf(e.krw)}</div>
+    <div data-act="markTaxDone" data-id="${e.id}" style="flex: 0 0 auto; border: 1px solid #0B6E8F; color: #0B6E8F; border-radius: 9px; padding: 5px 11px; font-size: 11px; cursor: pointer;">已退</div>
+  </div>`).join("");
+  const taxCard = taxTodo.length ? `
+    <div style="background: #FDFEFF; border: 1px solid #D8A34A; border-radius: 20px; padding: 16px; margin-top: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;">
+        <div style="font-size: 14px; font-weight: 500;">機場要辦的退稅</div>
+        <span style="font-size: 11px; color: #D8A34A;">${taxTodo.length} 筆待辦</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 10px;">
+        <span style="font-size: 12px; color: #7E8A8C;">消費 ₩${nf(taxTodoKrw)}</span>
+        <span style="font-size: 12px; color: #7E8A8C;">·</span>
+        <span style="font-size: 13px; color: #0B6E8F; font-weight: 500;">約可退 ₩${nf(taxTodoKrw * TAX_PCT)}</span>
+      </div>
+      <div data-act="toggleTaxList" style="margin-top: 10px; font-size: 11px; color: #0B6E8F; cursor: pointer;">${state.taxOpen ? "收起清單 ▲" : "看是哪幾筆 ▼"}</div>
+      ${state.taxOpen ? `<div style="margin-top: 6px;">${taxRows}</div>
+        <div data-act="markAllTaxDone" style="margin-top: 11px; text-align: center; background: #DDEDF4; border: 1px solid #CFE2EA; border-radius: 11px; padding: 10px 0; font-size: 12px; color: #0B6E8F; cursor: pointer;">全部標記已退</div>` : ""}
+      <div style="font-size: 10px; color: #BCC5C6; margin-top: 10px; line-height: 1.7;">到機場先辦退稅再託運行李，可能會抽驗商品。${taxDone.length ? "已退稅 " + taxDone.length + " 筆。" : ""}</div>
+    </div>` : (taxDone.length ? `
+    <div style="background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 20px; padding: 13px 16px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
+      <span style="font-size: 12px; color: #7E8A8C;">退稅已全部處理完</span>
+      <span style="font-size: 12px; color: #5F9E72;">已退 ${taxDone.length} 筆</span>
+    </div>` : "");
   const breakdown = ECATS.map(c => {
     const krw = state.expenses.filter(e => e.cat === c.k).reduce((s, e) => s + e.krw, 0);
     const p = totalKrw ? (krw / totalKrw) * 100 : 0;
@@ -1580,8 +1630,14 @@ function renderMoney() {
   }).join("");
   const expenseRows = state.expenses.map(e => {
     const c = ECATS.find(x => x.k === e.cat) || ECATS[3];
+    /* 退稅標籤：有標記就顯示狀態，沒標記但金額過門檻就給一個很淡的補標入口，
+       金額不到門檻完全不顯示，避免清單被雜訊塞滿 */
+    let taxTag = "";
+    if (e.tax === "todo") taxTag = `<span data-act="cycleExpTax" data-id="${e.id}" style="display: inline-block; margin-left: 7px; background: #FBF0DA; color: #A87A2B; border-radius: 7px; padding: 2px 7px; font-size: 10px; cursor: pointer;">待退稅</span>`;
+    else if (e.tax === "done") taxTag = `<span data-act="cycleExpTax" data-id="${e.id}" style="display: inline-block; margin-left: 7px; background: #E3F1E7; color: #4A8560; border-radius: 7px; padding: 2px 7px; font-size: 10px; cursor: pointer;">✓ 已退稅</span>`;
+    else if (e.krw >= TAX_MIN) taxTag = `<span data-act="cycleExpTax" data-id="${e.id}" style="display: inline-block; margin-left: 7px; color: #C3CBCD; border: 1px solid #E4EFF3; border-radius: 7px; padding: 2px 7px; font-size: 10px; cursor: pointer;">＋退稅</span>`;
     return `<div style="display: flex; align-items: center; gap: 12px; background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 16px; padding: 13px 15px;">
-      <div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 500;">${esc(e.name)}</div><div style="font-size: 11px; color: #9AA3A5; margin-top: 3px;">${c.label}</div></div>
+      <div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 500;">${esc(e.name)}</div><div style="font-size: 11px; color: #9AA3A5; margin-top: 3px;">${c.label}${taxTag}</div></div>
       <div style="text-align: right;"><div style="font-size: 14px; font-weight: 500;">₩${nf(e.krw)}</div><div style="font-size: 10px; color: #7E8A8C;">NT$${nf(e.krw / rate)}</div></div>
       <div data-act="deleteExpense" data-id="${e.id}" style="flex: 0 0 26px; height: 26px; border-radius: 999px; background: #E4EFF3; color: #A0A4AB; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer;">×</div>
     </div>`;
@@ -1603,6 +1659,7 @@ function renderMoney() {
         <span style="font-family: 'Playfair Display', serif; font-size: 21px; line-height: 1; color: #8CC7DC; font-variant-numeric: tabular-nums;">NT$${nf(totalKrw / rate)}</span>
       </div>
     </div>
+    ${taxCard}
     <div style="background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 20px; padding: 16px; margin-top: 12px;">
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <div style="font-size: 13px; font-weight: 500;">分類支出比例</div>
@@ -1626,6 +1683,7 @@ function renderMoney() {
         <div id="expTwdOut" style="flex: 0 0 96px; text-align: right; font-size: 12px; color: #0B6E8F;">≈ NT$${nf((parseFloat(String(state.form.krw || "").replace(/,/g, "")) || 0) / rate)}</div>
       </div>
       <div style="display: flex; gap: 6px; margin-top: 10px;">${catOpts}</div>
+      <div id="expTaxHint">${taxHintHTML()}</div>
       <div data-act="addExpense" style="margin-top: 13px; text-align: center; background: #0B6E8F; color: #fff; border-radius: 13px; padding: 13px 0; font-size: 14px; font-weight: 500; cursor: pointer;">記一筆</div>
     </div>
     <div style="display: flex; flex-direction: column; gap: 9px; margin-top: 14px;">${expenseRows}</div>
@@ -1854,10 +1912,20 @@ function onClick(e) {
       const krw = parseFloat(String(state.form.krw || "").replace(/,/g, "")) || 0;
       if (!krw) break;
       const exp = { id: newId("e"), name: (state.form.name || "").trim() || "未命名", krw, cat: state.form.cat };
-      state.form = Object.assign({}, state.form, { name: "", krw: "" });
+      if (krw >= TAX_MIN && state.form.tax) exp.tax = state.form.tax;
+      state.form = Object.assign({}, state.form, { name: "", krw: "", tax: null });
       setData({ expenses: [exp].concat(state.expenses) });
       break;
     }
+    case "pickFormTax": setUI({ form: Object.assign({}, state.form, { tax: state.form.tax === id ? null : id }) }); break;
+    case "toggleTaxList": setUI({ taxOpen: !state.taxOpen }); break;
+    case "cycleExpTax": {
+      const cyc = { todo: "done", done: null };   /* 無 → 待退稅 → 已退稅 → 無 */
+      setData({ expenses: state.expenses.map(x => String(x.id) === String(id) ? Object.assign({}, x, { tax: x.tax ? cyc[x.tax] : "todo" }) : x) });
+      break;
+    }
+    case "markTaxDone": setData({ expenses: state.expenses.map(x => String(x.id) === String(id) ? Object.assign({}, x, { tax: "done" }) : x) }); break;
+    case "markAllTaxDone": setData({ expenses: state.expenses.map(x => x.tax === "todo" ? Object.assign({}, x, { tax: "done" }) : x) }); break;
     case "deleteExpense": setData({ expenses: state.expenses.filter(x => String(x.id) !== String(id)) }); break;
     case "togglePack": { const pk = packList(); setData({ packing: pk.map(x => x.id === id ? Object.assign({}, x, { done: !x.done }) : x) }); break; }
     case "deletePack": { const pk = packList(); setData({ packing: pk.filter(x => x.id !== id) }); break; }
@@ -1945,6 +2013,11 @@ function onPointerDown(e) {
 
 function onInput(e) {
   const t = e.target;
+  /* 這兩個欄位是「打字時局部重繪某一塊 DOM」。blur 時瀏覽器會再補一個 change，
+     若在這時重繪，正在被點的那顆按鈕會在 mousedown 與 click 之間被換掉，
+     click 就找不到原本的節點而被吃掉（手機上就是「點第一下沒反應」）。
+     input 事件已涵蓋所有輸入，change 直接略過。 */
+  if (e.type === "change" && (t.id === "expKrwInput" || t.id === "poolSearchInput")) return;
   if (t.id === "fxKrwInput") { state.fxKrw = t.value; render(); return; }
   if (t.id === "rateInput") { state.rate = t.value; state.rateManual = true; saveCfg(); setData({ rate: t.value }); return; }
   if (t.id === "poolSearchInput") { state.q = t.value; document.getElementById("poolList").innerHTML = renderPoolList(); return; }
@@ -1954,8 +2027,14 @@ function onInput(e) {
   if (t.id === "expNameInput") { state.form = Object.assign({}, state.form, { name: t.value }); return; }
   if (t.id === "expKrwInput") {
     state.form = Object.assign({}, state.form, { krw: t.value });
+    /* 金額改到門檻以下就把退稅標記收回，免得下次打大金額時殘留上次的選擇 */
+    const k = parseFloat(String(t.value).replace(/,/g, "")) || 0;
+    if (k < TAX_MIN && state.form.tax) state.form.tax = null;
     const out = document.getElementById("expTwdOut");
     if (out) out.textContent = "≈ NT$" + nf((parseFloat(String(t.value).replace(/,/g, "")) || 0) / (parseFloat(state.rate) || 41));
+    /* 局部更新退稅提示，不整頁重繪，才不會打斷正在輸入的游標 */
+    const hint = document.getElementById("expTaxHint");
+    if (hint) hint.innerHTML = taxHintHTML();
     return;
   }
   if (t.id === "packInputEl") { state.packInput = t.value; return; }
