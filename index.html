@@ -1014,7 +1014,7 @@ let state = {
   rate: 41, fxOpen: false, fxKrw: "10000", q: "", poolCat: "all", mapCat: "all",
   addingId: null, editing: null, packInput: "", big: null, me: null, locState: "off", scrollTo: null,
   live: null, mapFail: false, tileFail: false, ttsErr: false, dragId: null,
-  form: { name: "", krw: "", cat: "food", tax: null },
+  form: { name: "", krw: "", cat: "food", tax: null, cur: "KRW" },
   taxOpen: false,
   cfg: { url: "", room: "", me: "" }, syncOn: false, syncState: "off", syncAt: 0,
   forecast: null, fcState: "load", rateManual: false, rateLive: null,
@@ -1739,7 +1739,8 @@ function renderPoolList() {
 
 /* 記帳表單裡的退稅提示：金額沒過門檻就完全不出現，不打擾小額消費 */
 function taxHintHTML() {
-  const krw = parseFloat(String(state.form.krw || "").replace(/,/g, "")) || 0;
+  let krw = parseFloat(String(state.form.krw || "").replace(/,/g, "")) || 0;
+  if ((state.form.cur || "KRW") === "TWD") krw = krw * (parseFloat(state.rate) || 41);
   if (krw < TAX_MIN) return "";
   const cur = state.form.tax || null;
   const btn = (k, label) => {
@@ -1751,6 +1752,14 @@ function taxHintHTML() {
     <div style="display: flex; gap: 7px; margin-top: 8px;">${btn("todo", "機場再退")}${btn("done", "已當場退")}</div>
     <div style="font-size: 10px; color: #BCC5C6; margin-top: 7px;">${cur ? "再點一次可取消" : "不用退稅就不用點，直接記一筆"}</div>
   </div>`;
+}
+
+/* 記帳輸入的換算提示。韓元就顯示約多少台幣，台幣就顯示約多少韓元。 */
+function expConvHint(val, cur, rate) {
+  const v = parseFloat(String(val || "").replace(/,/g, "")) || 0;
+  const r = parseFloat(rate) || 41;
+  if ((cur || "KRW") === "TWD") return "≈ ₩" + nf(v * r);
+  return "≈ NT$" + nf(v / r);
 }
 
 function renderMoney() {
@@ -1806,7 +1815,9 @@ function renderMoney() {
     else if (e.krw >= TAX_MIN) taxTag = `<span data-act="cycleExpTax" data-id="${e.id}" style="display: inline-block; margin-left: 7px; color: #C3CBCD; border: 1px solid #E4EFF3; border-radius: 7px; padding: 2px 7px; font-size: 10px; cursor: pointer;">＋退稅</span>`;
     return `<div style="display: flex; align-items: center; gap: 12px; background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 16px; padding: 13px 15px;">
       <div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 500;">${esc(e.name)}</div><div style="font-size: 11px; color: #9AA3A5; margin-top: 3px;">${c.label}${taxTag}</div></div>
-      <div style="text-align: right;"><div style="font-size: 14px; font-weight: 500;">₩${nf(e.krw)}</div><div style="font-size: 10px; color: #7E8A8C;">NT$${nf(e.krw / rate)}</div></div>
+      <div style="text-align: right;">${e.cur === "TWD"
+        ? `<div style="font-size: 14px; font-weight: 500;">NT$${nf(e.amt)}</div><div style="font-size: 10px; color: #7E8A8C;">₩${nf(e.krw)}</div>`
+        : `<div style="font-size: 14px; font-weight: 500;">₩${nf(e.krw)}</div><div style="font-size: 10px; color: #7E8A8C;">NT$${nf(e.krw / rate)}</div>`}</div>
       <div data-act="deleteExpense" data-id="${e.id}" style="flex: 0 0 26px; height: 26px; border-radius: 999px; background: #E4EFF3; color: #A0A4AB; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer;">×</div>
     </div>`;
   }).join("");
@@ -1843,12 +1854,18 @@ function renderMoney() {
     <div style="background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 20px; padding: 16px; margin-top: 12px;">
       <div style="font-size: 13px; font-weight: 500;">新增一筆</div>
       <input id="expNameInput" value="${esc(state.form.name || "")}" placeholder="品項，例：豬肉湯飯 ×2" style="width: 100%; margin-top: 11px; border: 1px solid #CFE2EA; border-radius: 12px; padding: 11px 13px; outline: 0; font-size: 14px;" />
+      <div style="display: flex; gap: 6px; margin-top: 10px;">
+        ${["KRW", "TWD"].map(cu => {
+          const on = (state.form.cur || "KRW") === cu;
+          return `<div data-act="pickExpCur" data-id="${cu}" style="flex: 1; text-align: center; border-radius: 11px; padding: 9px 0; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid ${on ? "#0B6E8F" : "#CFE2EA"}; background: ${on ? "#0B6E8F" : "#fff"}; color: ${on ? "#fff" : "#4A4E55"};">${cu === "KRW" ? "₩ 韓元" : "NT$ 台幣"}</div>`;
+        }).join("")}
+      </div>
       <div style="display: flex; align-items: center; gap: 10px; margin-top: 9px;">
         <label style="flex: 1; display: flex; align-items: center; gap: 6px; border: 1px solid #CFE2EA; border-radius: 12px; padding: 11px 13px;">
-          <span style="color: #9AA3A5; font-size: 13px;">₩</span>
-          <input id="expKrwInput" value="${esc(state.form.krw || "")}" inputmode="numeric" placeholder="金額" style="border: 0; outline: 0; width: 100%; font-size: 14px;" />
+          <span style="color: #9AA3A5; font-size: 13px;">${(state.form.cur || "KRW") === "TWD" ? "NT$" : "₩"}</span>
+          <input id="expKrwInput" value="${esc(state.form.krw || "")}" inputmode="decimal" placeholder="金額" style="border: 0; outline: 0; width: 100%; font-size: 14px;" />
         </label>
-        <div id="expTwdOut" style="flex: 0 0 96px; text-align: right; font-size: 12px; color: #0B6E8F;">≈ NT$${nf((parseFloat(String(state.form.krw || "").replace(/,/g, "")) || 0) / rate)}</div>
+        <div id="expTwdOut" style="flex: 0 0 104px; text-align: right; font-size: 12px; color: #0B6E8F;">${expConvHint(state.form.krw, state.form.cur, rate)}</div>
       </div>
       <div style="display: flex; gap: 6px; margin-top: 10px;">${catOpts}</div>
       <div id="expTaxHint">${taxHintHTML()}</div>
@@ -2132,10 +2149,17 @@ function onClick(e) {
       break;
     }
     case "pickExpCat": setUI({ form: Object.assign({}, state.form, { cat: id }) }); break;
+    case "pickExpCur": setUI({ form: Object.assign({}, state.form, { cur: id }) }); break;
     case "addExpense": {
-      const krw = parseFloat(String(state.form.krw || "").replace(/,/g, "")) || 0;
-      if (!krw) { window.alert("請先輸入金額（只能填數字）。"); break; }
+      const amt = parseFloat(String(state.form.krw || "").replace(/,/g, "")) || 0;
+      if (!amt) { window.alert("請先輸入金額（只能填數字）。"); break; }
+      const cur = state.form.cur || "KRW";
+      const r = parseFloat(state.rate) || 41;
+      /* 內部統一存韓元（總計、退稅、分類佔比都以韓元計算）。
+         用台幣記的那筆另外記下原幣別與原金額，清單才能顯示「你當初輸入的是 NT$」。 */
+      const krw = cur === "TWD" ? Math.round(amt * r) : amt;
       const exp = { id: newId("e"), name: (state.form.name || "").trim() || "未命名", krw, cat: state.form.cat };
+      if (cur === "TWD") { exp.cur = "TWD"; exp.amt = amt; }
       if (krw >= TAX_MIN && state.form.tax) exp.tax = state.form.tax;
       state.form = Object.assign({}, state.form, { name: "", krw: "", tax: null });
       setData({ expenses: [exp].concat(state.expenses) });
@@ -2271,10 +2295,12 @@ function onInput(e) {
   if (t.id === "expKrwInput") {
     state.form = Object.assign({}, state.form, { krw: t.value });
     /* 金額改到門檻以下就把退稅標記收回，免得下次打大金額時殘留上次的選擇 */
-    const k = parseFloat(String(t.value).replace(/,/g, "")) || 0;
+    /* 退稅門檻是韓元計價，台幣輸入要先換算再比較 */
+    let k = parseFloat(String(t.value).replace(/,/g, "")) || 0;
+    if ((state.form.cur || "KRW") === "TWD") k = k * (parseFloat(state.rate) || 41);
     if (k < TAX_MIN && state.form.tax) state.form.tax = null;
     const out = document.getElementById("expTwdOut");
-    if (out) out.textContent = "≈ NT$" + nf((parseFloat(String(t.value).replace(/,/g, "")) || 0) / (parseFloat(state.rate) || 41));
+    if (out) out.textContent = expConvHint(t.value, state.form.cur, state.rate);
     /* 局部更新退稅提示，不整頁重繪，才不會打斷正在輸入的游標 */
     const hint = document.getElementById("expTaxHint");
     if (hint) hint.innerHTML = taxHintHTML();
