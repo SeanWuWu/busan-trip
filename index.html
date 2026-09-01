@@ -909,6 +909,14 @@ const TAX_PCT = 0.07;
 const KEY = "busan2026.guide.v3";
 const CFG_KEY = "busan2026.sync.cfg.v2";
 
+/* 同步後端寫死在這裡，使用者只要輸入名字就能用。
+   房間固定為 ROOM，兩人輸入不同名字也是共用同一份行程 —— 名字只用來
+   標示「最後是誰改的」，不是密碼。
+   注意：這是 Firebase 測試模式資料庫，知道網址的人就能讀寫，
+   所以這裡只放行程與記帳，不要放證件號碼之類的個資。 */
+const FB_URL = "https://busan-trip-55f55-default-rtdb.asia-southeast1.firebasedatabase.app";
+const ROOM = "Busan";
+
 const P = id => PLACES.find(p => p.id === id);
 const nf = n => (Math.round(n) || 0).toLocaleString("en-US");
 const mins = t => { const m = /^(\d{1,2})\s*[:：]\s*(\d{2})$/.exec((t || "").trim()); return m ? +m[1] * 60 + +m[2] : 9999; };
@@ -937,11 +945,7 @@ function navBtn(kind, url, size, radius) {
    ============================================================ */
 let LAST_SYNC_ERR = "";
 function fbEndpoint() {
-  const url = (state.cfg.url || "").trim();
-  if (!url) return null;
-  const base = url.replace(/\/+$/, "");
-  const room = (state.cfg.room || "busan").replace(/[^\w-]/g, "") || "busan";
-  return base + "/trips/" + room + ".json";
+  return FB_URL.replace(/\/+$/, "") + "/trips/" + ROOM + ".json";
 }
 
 /* ============================================================
@@ -957,14 +961,13 @@ let state = {
   taxOpen: false,
   cfg: { url: "", room: "", me: "" }, syncOn: false, syncState: "off", syncAt: 0,
   forecast: null, fcState: "load", rateManual: false, rateLive: null,
-  backupOpen: false, importText: "", importArmed: false, importMsg: "",
-  syncHelpOpen: false
+  backupOpen: false, importText: "", importArmed: false, importMsg: ""
 };
 
 let map = null, mapEl = null, markers = {}, mapBootTries = 0, pendingFocus = null, meMarker = null;
 let lastDrawnCat = null, tileErrs = 0;
 let drag = null, rafPending = false;
-let syncTimer = null, pushTimer = null, applyingRemote = false, syncFails = 0;
+let syncTimer = null, pushTimer = null, applyingRemote = false, syncFails = 0, syncDebounce = null;
 let uid = 0;
 function newId(prefix) { uid++; return prefix + Date.now().toString(36) + uid.toString(36); }
 
@@ -988,6 +991,10 @@ function loadLocal() {
   try {
     const c = JSON.parse(localStorage.getItem(CFG_KEY) || "null");
     if (c) { state.cfg = Object.assign({ url: "", room: "", me: "" }, c.cfg || {}); state.syncOn = !!c.syncOn; state.rateManual = !!c.rateManual; }
+    /* 舊版使用者可能存過自己的網址／房間；現在一律走內建的，清掉避免混淆 */
+    state.cfg.url = ""; state.cfg.room = "";
+    /* 填過名字就直接開同步，不用再按「開始同步」 */
+    if ((state.cfg.me || "").trim()) state.syncOn = true;
   } catch (e) {}
 }
 
@@ -1797,10 +1804,9 @@ function renderTools() {
   const syncLabels = { off: "本機儲存", wait: "連線中…", ok: "已同步", err: "同步失敗" };
   const syncFg = { off: "#7E8A8C", wait: "#D8A34A", ok: "#5F9E72", err: "#C4614A" };
   const secAgo = state.syncAt ? Math.round((Date.now() - state.syncAt) / 1000) : 0;
-  const hasEndpoint = !!fbEndpoint();
   const syncDetail = state.syncOn
-    ? (hasEndpoint ? "已開啟 · 房間「" + esc(state.cfg.room || "busan") + "」 · 上次同步 " + (state.syncAt ? secAgo + " 秒前" : "尚未") + "。以最後修改的人為準，建議不要同時改同一項。" : "請先貼上資料庫網址。")
-    : "貼上資料庫網址、取一個兩人都知道的房間代號，再按「開始同步」。";
+    ? "同步中 · 上次更新 " + (state.syncAt ? secAgo + " 秒前" : "尚未") + "。以最後修改的人為準，建議不要兩人同時改同一項。"
+    : "已暫停，目前的修改只存在這支手機。";
 
   return `
   <div style="padding: 18px 18px 130px;">
@@ -1814,26 +1820,16 @@ function renderTools() {
         <div style="font-size: 14px; font-weight: 500;">兩人共用同步</div>
         <span style="font-size: 11px; color: ${syncFg[state.syncState] || "#7E8A8C"};">${syncLabels[state.syncState] || "本機儲存"}</span>
       </div>
-      <div style="font-size: 12px; color: #7E8A8C; margin-top: 7px; line-height: 1.75;">兩支手機各自把這個網頁存到主畫面使用，不需要透過 Claude。貼上你的 Firebase Realtime Database 網址、取一個只有你們知道的房間代號，兩支手機填一樣的，改動幾秒內互相同步。沒填也能用，只是各自存在自己手機。</div>
-      <input id="syncUrlInput" data-bind="cfgUrl" value="${esc(state.cfg.url)}" placeholder="https://你的專案.firebaseio.com" style="width: 100%; margin-top: 11px; border: 1px solid #CFE2EA; border-radius: 12px; padding: 11px 13px; outline: 0; font-size: 13px;" />
-      <div style="display: flex; gap: 8px; margin-top: 8px;">
-        <input id="syncRoomInput" data-bind="cfgRoom" value="${esc(state.cfg.room)}" placeholder="房間代號 例：busan-jia" style="flex: 1; min-width: 0; border: 1px solid #CFE2EA; border-radius: 12px; padding: 11px 13px; outline: 0; font-size: 13px;" />
-        <input id="syncMeInput" data-bind="cfgMe" value="${esc(state.cfg.me)}" placeholder="我的名字" style="flex: 0 0 104px; border: 1px solid #CFE2EA; border-radius: 12px; padding: 11px 13px; outline: 0; font-size: 13px;" />
+      <div style="font-size: 12px; color: #7E8A8C; margin-top: 7px; line-height: 1.75;">輸入你的名字就開始同步。兩支手機都把這個網頁存到主畫面，各自填自己的名字，行程、記帳、打包清單就會自動共用，改動幾秒內互通。不填也能用，只是資料只存在自己手機。</div>
+      <input id="syncMeInput" data-bind="cfgMe" value="${esc(state.cfg.me)}" placeholder="輸入我的名字，例：Sean" style="width: 100%; margin-top: 12px; border: 1px solid ${(state.cfg.me || "").trim() ? "#0B6E8F" : "#CFE2EA"}; border-radius: 12px; padding: 13px 14px; outline: 0; font-size: 15px;" />
+      ${(state.cfg.me || "").trim() ? `
+      <div style="display: flex; gap: 8px; margin-top: 10px;">
+        <div data-act="pullNow" style="flex: 1; text-align: center; background: #DDEDF4; border: 1px solid #CFE2EA; border-radius: 12px; padding: 11px 0; font-size: 13px; cursor: pointer;">立即更新</div>
+        <div data-act="toggleSyncOn" style="flex: 0 0 96px; text-align: center; border: 1px solid #CFE2EA; border-radius: 12px; padding: 11px 0; font-size: 13px; color: #7E8A8C; cursor: pointer;">${state.syncOn ? "暫停" : "繼續"}</div>
       </div>
-      <div style="display: flex; gap: 8px; margin-top: 11px;">
-        <div data-act="toggleSyncOn" style="flex: 1; text-align: center; background: #0B6E8F; color: #fff; border-radius: 12px; padding: 11px 0; font-size: 13px; font-weight: 500; cursor: pointer;">${state.syncOn ? "停止同步" : "開始同步"}</div>
-        <div data-act="pullNow" style="flex: 0 0 96px; text-align: center; background: #DDEDF4; border: 1px solid #CFE2EA; border-radius: 12px; padding: 11px 0; font-size: 13px; cursor: pointer;">立即拉取</div>
-      </div>
-      <div style="font-size: 11px; color: #9AA3A5; margin-top: 9px; line-height: 1.7;">${syncDetail}</div>
-      <div data-act="toggleSyncHelp" style="margin-top: 10px; font-size: 11px; color: #0B6E8F; cursor: pointer;">${state.syncHelpOpen ? "收起設定步驟 ▲" : "還沒有 Firebase 網址？看設定步驟 ▼"}</div>
-      ${state.syncHelpOpen ? `<div style="margin-top: 9px; padding: 12px 13px; background: #F2F9FB; border-radius: 12px; font-size: 11px; color: #4A4E55; line-height: 1.9;">
-        1. 瀏覽器開 <span style="color:#0B6E8F;">console.firebase.google.com</span>，用 Google 帳號登入<br>
-        2. 「新增專案」→ 輸入任意名稱（例：busan-trip）→ 一路下一步建立<br>
-        3. 左側選單「Build → Realtime Database」→「建立資料庫」→ 位置選近的（如 asia-southeast1）→ 安全性規則選「測試模式」<br>
-        4. 建好後畫面最上面會有一段網址，格式像 <span style="color:#0B6E8F;">https://busan-trip-xxxx-default-rtdb.asia-southeast1.firebasedatabase.app</span>，整段複製貼到上面「資料庫網址」<br>
-        5. 房間代號兩人填一樣、取獨特一點的字串（測試模式資料庫只要知道網址跟房間代號就能讀寫，等同弱密碼）<br>
-        6. 測試模式預設 30 天後會鎖住讀寫，屆時回控制台把規則的到期日延長即可，資料不會不見
-      </div>` : ""}
+      <div style="font-size: 11px; color: #9AA3A5; margin-top: 9px; line-height: 1.7;">${syncDetail}</div>`
+      : `<div style="font-size: 11px; color: #9AA3A5; margin-top: 9px; line-height: 1.7;">目前只存在這支手機。填名字後會自動與另一支手機同步。</div>`}
+      <div style="margin-top: 10px; padding: 10px 12px; background: #F2F9FB; border-radius: 11px; font-size: 10px; color: #9AA3A5; line-height: 1.7;">同步資料放在共用的雲端資料庫，只用來存行程與記帳。請不要在備註裡寫證件號碼、信用卡等個資。</div>
       <div data-act="openBackup" style="margin-top: 11px; text-align: center; border: 1px dashed #B9D5E0; border-radius: 12px; padding: 10px 0; font-size: 12px; color: #0B6E8F; cursor: pointer;">資料備份 / 還原</div>
       <div style="font-size: 10px; color: #BCC5C6; margin-top: 9px; line-height: 1.6;">出發前與回國後各備份一次比較安心。${LAST_SYNC_ERR ? "錯誤：" + esc(LAST_SYNC_ERR) : ""}</div>
       ${state.saveErr ? `<div style="margin-top: 9px; padding: 10px 12px; background: #FBF3F1; border: 1px solid #EEDDD8; border-radius: 12px; font-size: 11px; color: #B4654A; line-height: 1.7;">⚠️ 這台裝置無法寫入本機儲存（可能是無痕模式或空間已滿），目前的修改<b>關掉頁面就會不見</b>。請立刻用上方「資料備份」複製一份。</div>` : ""}
@@ -2109,7 +2105,6 @@ function onClick(e) {
       break;
     }
     case "pullNow": doPull(true); break;
-    case "toggleSyncHelp": setUI({ syncHelpOpen: !state.syncHelpOpen }); break;
     case "useLiveRate": {
       state.rateManual = false; saveCfg();
       if (state.rateLive) setData({ rate: state.rateLive }); else { render(); fetchRate(); }
@@ -2151,9 +2146,16 @@ function onInput(e) {
     state.rateManual = true; saveCfg(); setData({ rate: state.rate }); return;
   }
   if (t.id === "poolSearchInput") { state.q = t.value; document.getElementById("poolList").innerHTML = renderPoolList(); return; }
-  if (t.id === "syncUrlInput") { state.cfg = Object.assign({}, state.cfg, { url: t.value }); saveCfg(); return; }
-  if (t.id === "syncRoomInput") { state.cfg = Object.assign({}, state.cfg, { room: t.value }); saveCfg(); return; }
-  if (t.id === "syncMeInput") { state.cfg = Object.assign({}, state.cfg, { me: t.value }); saveCfg(); return; }
+  if (t.id === "syncMeInput") {
+    const had = !!(state.cfg.me || "").trim();
+    state.cfg = Object.assign({}, state.cfg, { me: t.value });
+    const has = !!t.value.trim();
+    state.syncOn = has;
+    saveCfg();
+    /* 從沒名字變成有名字（或反過來）才重啟同步，打字中途不要一直重連 */
+    if (had !== has) { clearTimeout(syncDebounce); syncDebounce = setTimeout(() => { startSync(); render(); }, 600); }
+    return;
+  }
   if (t.id === "expNameInput") { state.form = Object.assign({}, state.form, { name: t.value }); return; }
   if (t.id === "expKrwInput") {
     state.form = Object.assign({}, state.form, { krw: t.value });
