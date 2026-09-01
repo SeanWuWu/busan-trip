@@ -927,7 +927,31 @@ const nf = n => (Math.round(n) || 0).toLocaleString("en-US");
 const mins = t => { const m = /^(\d{1,2})\s*[:：]\s*(\d{2})$/.exec((t || "").trim()); return m ? +m[1] * 60 + +m[2] : 9999; };
 const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const naverUrl = p => p ? "https://map.naver.com/p/search/" + encodeURIComponent(p.kr || p.name) : "https://map.naver.com/";
-const googleUrl = p => p ? "https://www.google.com/maps/search/?api=1&query=" + p.ll[0] + "," + p.ll[1] : "https://maps.google.com/";
+/* Google 用店名搜尋比丟座標準：座標只會落在地圖上一個點，
+   店名才會直接跳出那間店的資訊卡（營業時間、評論、導航）。
+   有座標時一起帶上，避免同名店家跑到別的城市。 */
+const googleUrl = p => {
+  if (!p) return "https://maps.google.com/";
+  const q = (p.kr || p.name || "").trim();
+  if (!q) return "https://www.google.com/maps/search/?api=1&query=" + p.ll[0] + "," + p.ll[1];
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
+};
+/* 行程項目：優先用使用者自己打的標題去搜尋（例：「烤肉的男子 西面店」），
+   沒有標題才退回原本的地點資料。這樣自訂項目也能一鍵導航。 */
+function itemSearchName(it, p) {
+  const title = (it && it.title || "").trim();
+  if (p) return p.kr || p.name;
+  return title;
+}
+function itemNaverUrl(it, p) {
+  const q = itemSearchName(it, p);
+  return q ? "https://map.naver.com/p/search/" + encodeURIComponent(q) : "https://map.naver.com/";
+}
+function itemGoogleUrl(it, p) {
+  const q = itemSearchName(it, p);
+  if (!q) return "https://maps.google.com/";
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q + " 부산");
+}
 
 /* 官方品牌 icon（inline SVG）
    Naver：官方 logomark，圓角方塊本身即為綠色 #03C75A，中間 N 用鏤空表現，需襯白底才看得清楚。
@@ -960,7 +984,7 @@ let state = {
   tab: "itin", day: 0, checks: {}, notes: {}, extras: {}, edits: {}, order: {},
   expenses: [], packing: null, updatedAt: 0,
   rate: 41, fxOpen: false, fxKrw: "10000", q: "", poolCat: "all", mapCat: "all",
-  addingId: null, editing: null, packInput: "", big: null, me: null, locState: "off",
+  addingId: null, editing: null, packInput: "", big: null, me: null, locState: "off", scrollTo: null,
   live: null, mapFail: false, tileFail: false, ttsErr: false, dragId: null,
   form: { name: "", krw: "", cat: "food", tax: null },
   taxOpen: false,
@@ -1012,6 +1036,13 @@ function jumpToToday() {
 }
 function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify({ cfg: state.cfg, syncOn: state.syncOn, rateManual: state.rateManual })); } catch (e) {} }
 
+/* 中文／日文輸入法「組字中」時絕對不能重繪 DOM，否則正在組的字會被吃掉。
+   composing 期間把重繪需求記下來，等 compositionend 再補畫。 */
+let composing = false, renderPending = false;
+function render() {
+  if (composing) { renderPending = true; return; }
+  renderNow();
+}
 function setUI(patch) { Object.assign(state, patch); render(); }
 function setData(patch) { Object.assign(state, patch, { updatedAt: Date.now() }); saveLocal(); render(); schedulePush(); }
 
@@ -1168,7 +1199,8 @@ function dayItems(di) {
     .filter(it => !(ed[it.id] && ed[it.id].hidden))
     .map(it => Object.assign({}, it, {
       t: (ed[it.id] && ed[it.id].t !== undefined) ? ed[it.id].t : it.t,
-      title: (ed[it.id] && ed[it.id].title !== undefined) ? ed[it.id].title : it.title
+      title: (ed[it.id] && ed[it.id].title !== undefined) ? ed[it.id].title : it.title,
+      cat: (ed[it.id] && ed[it.id].cat !== undefined) ? ed[it.id].cat : it.cat
     }));
   const ord = state.order[di];
   if (ord && ord.length) {
@@ -1205,8 +1237,16 @@ function addExtra(di, item, opts) {
   const patch = { extras: Object.assign({}, state.extras, { [di]: list }) };
   if (opts && opts.editTitle) patch.editing = id + ":title";
   if (opts && opts.jump) { patch.tab = "itin"; patch.day = di; patch.addingId = null; }
-  const ord = state.order[di];
-  if (ord && ord.length) patch.order = Object.assign({}, state.order, { [di]: ord.concat([id]) });
+  if (opts && opts.toTop) {
+    /* 新增的空白項目要馬上看得到，所以插到清單最前面（等於切成手動排序）。
+       填好時間後按「依時間排序」就會歸位。 */
+    const ids = dayItems(di).map(x => x.id);
+    patch.order = Object.assign({}, state.order, { [di]: [id].concat(ids) });
+    patch.scrollTo = id;
+  } else {
+    const ord = state.order[di];
+    if (ord && ord.length) patch.order = Object.assign({}, state.order, { [di]: ord.concat([id]) });
+  }
   setData(patch);
 }
 
@@ -1364,7 +1404,7 @@ function goTo(ll, z) {
    ============================================================ */
 function chip(on) { return { bg: on ? "#0F3A4C" : "#fff", fg: on ? "#fff" : "#6C767A", bd: on ? "#0F3A4C" : "#CFE2EA" }; }
 
-function render() {
+function renderNow() {
   const root = document.getElementById("app");
   const active = document.activeElement;
   let restore = null;
@@ -1373,6 +1413,8 @@ function render() {
   }
   root.innerHTML = renderTopBar() + renderTabContent() + renderBigModal() + renderBackupModal() + renderBottomNav();
   /* 統一補上無障礙屬性，不用在幾十處樣板各寫一次 */
+  /* #5 備註自動長高：rows=1 會把長備註切掉，改成依內容撐開 */
+  root.querySelectorAll("textarea[data-bind-note]").forEach(autoGrow);
   root.querySelectorAll("[data-act]").forEach(el => {
     const tag = el.tagName;
     if (tag === "A" || tag === "INPUT" || tag === "TEXTAREA") return;
@@ -1387,6 +1429,17 @@ function render() {
         try { el.setSelectionRange(restore.start, restore.end); } catch (e) {}
       }
     }
+  }
+  if (state.scrollTo) {
+    const target = state.scrollTo; state.scrollTo = null;
+    setTimeout(() => {
+      const el = document.querySelector('[data-item-id="' + target + '"]');
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        const inp = el.querySelector("[data-bind-title]");
+        if (inp) { try { inp.focus(); } catch (e) {} }
+      }
+    }, 40);
   }
   if (state.tab === "map" && !state.mapFail) {
     const mount = document.getElementById("mapMount");
@@ -1481,7 +1534,7 @@ function renderItin() {
             ${timeEditing
               ? `<input id="editTime-${k}" data-bind-time="${k}" value="${esc(it.t)}" placeholder="09:30" style="width: 64px; font-size: 11px; font-weight: 500; background: #FDFEFF; border: 1px solid #0B6E8F; border-radius: 6px; padding: 4px 6px; outline: 0; text-align: center;" />`
               : `<span data-act="startTimeEdit" data-id="${k}" style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 500; letter-spacing: .06em; color: #0B6E8F; background: #E3F0F6; border: 1px solid #C2DCEA; border-radius: 6px; padding: 3px 7px; cursor: pointer;">${esc(it.t)}<span style="opacity: .45;">✎</span></span>`}
-            <span style="font-size: 10px; color: ${c.color}; border: 1px solid ${c.bd}; border-radius: 6px; padding: 3px 7px;">${c.label}</span>
+            <span data-act="cycleCat" data-id="${k}" style="font-size: 10px; color: ${c.color}; background: ${c.bg}; border: 1px solid ${c.bd}; border-radius: 6px; padding: 3px 7px; cursor: pointer;">${c.label}<span style="opacity:.45; margin-left:3px;">▾</span></span>
           </div>
           ${titleEditing
             ? `<input id="editTitle-${k}" data-bind-title="${k}" value="${esc(it.title)}" placeholder="要做什麼？" style="width: 100%; margin-top: 8px; font-size: 16px; font-weight: 500; background: #FDFEFF; border: 1px solid #0B6E8F; border-radius: 9px; padding: 7px 9px; outline: 0;" />`
@@ -1490,11 +1543,11 @@ function renderItin() {
         </div>
         <div data-drag="1" data-id="${k}" style="flex: 0 0 30px; height: 30px; border-radius: 9px; background: #E4EFF3; color: #A9ADB4; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: grab; touch-action: none; user-select: none;">⠿</div>
       </div>
-      <textarea id="note-${k}" data-bind-note="${k}" placeholder="加一則備註…" rows="1" style="width: 100%; margin-top: 12px; border: 0; border-top: 1px dashed #CFE2EA; padding: 10px 2px 2px; outline: 0; resize: none; background: transparent; font-size: 13px; color: #4A4E55; line-height: 1.6;">${esc(state.notes[k] || "")}</textarea>
+      <textarea id="note-${k}" data-bind-note="${k}" placeholder="加一則備註…" rows="1" style="width: 100%; margin-top: 12px; border: 0; border-top: 1px dashed #CFE2EA; padding: 10px 2px 2px; outline: 0; resize: none; overflow: hidden; background: transparent; font-size: 13px; color: #4A4E55; line-height: 1.6; white-space: pre-wrap; word-break: break-word;">${esc(state.notes[k] || "")}</textarea>
       <div style="display: flex; gap: 8px; margin-top: 12px;">
         <div data-act="focusOnMap" data-id="${it.pid || ""}" style="flex: 1; text-align: center; background: #DDEDF4; border: 1px solid #CFE2EA; border-radius: 11px; padding: 9px 0; font-size: 12px; font-weight: 500; cursor: pointer;">在地圖上查看</div>
-        ${navBtn("naver", naverUrl(p), 44, 11)}
-        ${navBtn("google", googleUrl(p), 44, 11)}
+        ${navBtn("naver", itemNaverUrl(it, p), 44, 11)}
+        ${navBtn("google", itemGoogleUrl(it, p), 44, 11)}
         <div data-act="deleteItem" data-id="${k}" style="flex: 0 0 40px; text-align: center; background: #FBF3F1; border: 1px solid #EEDDD8; border-radius: 11px; padding: 9px 0; font-size: 13px; color: #B4654A; cursor: pointer;">✕</div>
       </div>
     </div>`;
@@ -1957,6 +2010,22 @@ function bindEvents() {
   root.addEventListener("change", onInput);
   root.addEventListener("blur", onBlur, true);
   root.addEventListener("keydown", onKeyDown);
+  root.addEventListener("compositionstart", () => { composing = true; });
+  root.addEventListener("compositionend", () => {
+    composing = false;
+    /* 組字結束後把最終文字補存一次，再處理期間被擋下的重繪 */
+    const t = document.activeElement;
+    if (t && t.getAttribute) {
+      const nid = t.getAttribute("data-bind-note");
+      if (nid) state.notes = Object.assign({}, state.notes, { [nid]: t.value });
+      const tid = t.getAttribute("data-bind-title");
+      if (tid) patchEditSilent(tid, { title: t.value });
+      if (t.id === "expNameInput") state.form = Object.assign({}, state.form, { name: t.value });
+      if (t.id === "packInputEl") state.packInput = t.value;
+      if (t.id === "syncMeInput") { state.cfg = Object.assign({}, state.cfg, { me: t.value }); saveCfg(); }
+    }
+    if (renderPending) { renderPending = false; render(); }
+  });
 }
 
 /* Enter 收下編輯、Esc 取消，手機外接鍵盤與桌機都能離開編輯狀態 */
@@ -1980,9 +2049,18 @@ function onClick(e) {
   switch (act) {
     case "toggleFx": setUI({ fxOpen: !state.fxOpen }); break;
     case "pickDay": setUI({ day: +id }); break;
-    case "addBlank": addExtra(state.day, { t: nextSlot(state.day), pid: null, cat: "sight", title: "", desc: "" }, { editTitle: true }); break;
+    case "addBlank": addExtra(state.day, { t: nextSlot(state.day), pid: null, cat: "sight", title: "", desc: "" }, { editTitle: true, toTop: true }); break;
     case "toggleSort": { const o = Object.assign({}, state.order); delete o[state.day]; setData({ order: o }); break; }
     case "toggleCheck": setData({ checks: Object.assign({}, state.checks, { [id]: !state.checks[id] }) }); break;
+    case "cycleCat": {
+      /* 點分類標籤就換下一個（景點→美食→咖啡→麵包→購物→住宿→景點…） */
+      const keys = Object.keys(CAT);
+      const it = dayItems(state.day).find(x => x.id === id);
+      if (!it) break;
+      const cur = keys.indexOf(it.cat);
+      patchEdit(id, { cat: keys[(cur + 1) % keys.length] });
+      break;
+    }
     case "startTimeEdit": setUI({ editing: id + ":time" }); break;
     case "startTitleEdit": setUI({ editing: id + ":title" }); break;
     case "focusOnMap": focusOnMap(id || null); break;
@@ -2181,7 +2259,13 @@ function onInput(e) {
   const titleId = t.getAttribute && t.getAttribute("data-bind-title");
   if (titleId) { patchEditSilent(titleId, { title: t.value }); return; }
   const noteId = t.getAttribute && t.getAttribute("data-bind-note");
-  if (noteId) { state.notes = Object.assign({}, state.notes, { [noteId]: t.value }); return; }
+  if (noteId) { state.notes = Object.assign({}, state.notes, { [noteId]: t.value }); autoGrow(t); return; }
+}
+
+function autoGrow(el) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = (el.scrollHeight + 2) + "px";
 }
 
 function patchEditSilent(id, patch) {
@@ -2191,6 +2275,7 @@ function patchEditSilent(id, patch) {
 function onBlur(e) {
   const t = e.target;
   if (!t || !t.getAttribute) return;
+  if (composing) return;
   if (t.id && t.id.indexOf("editTime-") === 0) { setData({ edits: state.edits, editing: null }); return; }
   if (t.id && t.id.indexOf("editTitle-") === 0) { setData({ edits: state.edits, editing: null }); return; }
   if (t.getAttribute("data-bind-note")) { setData({ notes: state.notes }); return; }
