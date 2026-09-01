@@ -936,12 +936,40 @@ const googleUrl = p => {
   if (!q) return "https://www.google.com/maps/search/?api=1&query=" + p.ll[0] + "," + p.ll[1];
   return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
 };
-/* 行程項目：優先用使用者自己打的標題去搜尋（例：「烤肉的男子 西面店」），
-   沒有標題才退回原本的地點資料。這樣自訂項目也能一鍵導航。 */
+/* 導航一律搜尋「畫面上現在顯示的標題」。
+   使用者改過標題（例：把「晚餐：韓定食」改成「巨大牛肉湯飯」）之後，
+   連結就要跟著改，不能還跳到原本綁定的舊地點。
+   只有標題被清空時，才退回原本的地點名稱當備援。
+   標題若是「晚餐：店名」這種格式，去掉冒號前的前綴再搜，命中率較高。 */
+function cleanSearchText(t) {
+  let x = (t || "").trim();
+  /* 去掉「晚餐：」「午餐:」「宵夜：」之類的前綴，只留店名 */
+  const m = /^[^：:]{1,6}[：:]\s*(.+)$/.exec(x);
+  if (m && m[1].trim()) x = m[1].trim();
+  /* 去掉括號內的補充說明，例：「Spa Land 汗蒸幕（避開人潮）」→「Spa Land 汗蒸幕」 */
+  x = x.replace(/[（(][^）)]*[）)]/g, " ");
+  /* 「A 或 B」只取第一個 */
+  x = x.split(/\s*(?:或|／|\/)\s*/)[0];
+  return x.replace(/\s+/g, " ").trim();
+}
+
+/* 判斷這個項目的標題是不是被使用者改過。
+   edits[id].title 有值就代表是使用者自己打的；沒有就是原始行程文字。
+   原始文字多半是「晚餐：民樂洞炭烤活扇貝」這種描述句，
+   拿去韓國地圖搜不到，所以一律用地點的韓文名。 */
+function isTitleEdited(it) {
+  const e = it && state.edits[it.id];
+  return !!(e && e.title !== undefined && String(e.title).trim());
+}
+
 function itemSearchName(it, p) {
-  const title = (it && it.title || "").trim();
+  const edited = isTitleEdited(it);
+  /* 使用者改過標題 → 以他打的為準（行程改了，連結就要跟著改） */
+  if (edited) return cleanSearchText(it.title) || (p ? (p.kr || p.name) : "");
+  /* 沒改過 → 用地點的韓文名，命中率最高 */
   if (p) return p.kr || p.name;
-  return title;
+  /* 自訂項目（沒綁地點）→ 用標題 */
+  return cleanSearchText(it && it.title);
 }
 function itemNaverUrl(it, p) {
   const q = itemSearchName(it, p);
