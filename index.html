@@ -695,6 +695,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
   #app { max-width: 430px; margin: 0 auto; min-height: 100vh; background: #EAF3F6; position: relative; box-shadow: 0 0 70px rgba(3,22,30,.45); }
   .hscroll { display: flex; overflow-x: auto; }
   .grow { flex: 1; min-width: 0; }
+  .nav-ico { width: 28px; height: 24px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .nav-ico img { width: 100%; height: 100%; object-fit: contain; min-width: 0; min-height: 0; display: block; }
   /* Leaflet 圖層是 position:absolute，容器必須是定位基準，否則標記與圖磚會蓋住整頁 */
   #mapContainer.leaflet-container {
     position: relative;
@@ -907,6 +909,41 @@ const DEFAULT_PACK = [
   "薄外套（早晚海邊涼）", "好走的鞋", "折傘", "保養品分裝", "空的伴手禮提袋"
 ];
 
+const SHOP_SECS = [
+  { k: "daiso", label: "大創", full: "大創 DAISO", hint: "西面、南浦、海雲台都有。庫存會換，用韓文搜尋字找。" },
+  { k: "olive", label: "Olive", full: "Olive Young", hint: "單筆滿 ₩15,000 出示護照可退稅。" },
+  { k: "gift", label: "伴手禮", full: "釜山伴手禮", hint: "優先買常溫禮盒；需冷藏的最後一天再買。" }
+];
+const DEFAULT_SHOP = {
+  daiso: [
+    { id: "ds-scrub", name: "去角質搓澡布／搓澡手套", search: "때타올 / 때밀이", note: "約 ₩1,000 起" },
+    { id: "ds-vaseline", name: "凡士林面膜（Vaseline）", search: "바세린 마스크", note: "一片約 ₩1,000；藍保濕／綠補水／棕滋養" },
+    { id: "ds-socks", name: "襪子", search: "양말", note: "常 ₩1,000，可一次多雙" },
+    { id: "ds-pcard", name: "小卡／拍貼保護套、卡冊", search: "포토카드 / 포카홀더 / 바인더", note: "文具／追星區" },
+    { id: "ds-hand", name: "Daily Comma 護手霜", search: "데일리콤마 핸드크림", note: "約 50ml、₩2,000；現場開蓋聞香" },
+    { id: "ds-solid", name: "Daily Comma 固體香膏", search: "데일리콤마 고체향수", note: "約 4.7g；白／藍較中性" },
+    { id: "ds-shower", name: "淨水蓮蓬頭", search: "정수 샤워기 / 필터 샤워기", note: "認可換濾芯" },
+    { id: "ds-pad", name: "腋下吸汗墊（8 片裝）", search: "겨땀 패드", note: "貼衣服腋下內側，不是貼皮膚" }
+  ],
+  olive: [
+    { id: "oy-garglin", name: "Garglin 口腔噴霧", search: "가그린 스프레이", note: "約 15ml" },
+    { id: "oy-dokdo", name: "Round Lab 獨島化妝水", search: "라운드랩 독도 토너", note: "洗臉後拍臉" },
+    { id: "oy-ideal", name: "IDEAL FOR MEN All-in-One", search: "아이디얼포맨 올인원", note: "男士區；一瓶＝水＋乳＋精華" },
+    { id: "oy-birch", name: "Round Lab 白樺樹防曬", search: "라운드랩 자작나무 선크림", note: "SPF50+，質地偏乳液" }
+  ],
+  gift: [
+    { id: "gf-bada", name: "Busan Bada Sand 奶油夾心餅", search: "부산바다샌드", note: "海理團路／甘川洞；賣完提早關" },
+    { id: "gf-keveren", name: "Keveren House 奶油派", search: "캐버린하우스", note: "與 Bada Sand 同一巷" },
+    { id: "gf-cheffle", name: "CHEFFLE 起司舒芙蕾", search: "치플레", note: "廣安里常設店；Centum 先確認" },
+    { id: "gf-ops", name: "OPS 烘焙屋點心", search: "옵스", note: "海雲台站 1 號出口；看常溫保存" },
+    { id: "gf-bc", name: "B&C 派饅頭／黃豆粉年糕麵包", search: "비엔씨제과", note: "釜山站 2 樓；年糕麵包效期短" },
+    { id: "gf-2dae", name: "二代名菓煎餅", search: "이대명과", note: "海雲台店，近 OPS；常溫好帶" },
+    { id: "gf-clam", name: "Clam Sand／HEEMA 夾心餅", search: "클램샌드 / 히마스토어", note: "分店不固定，現場搜" },
+    { id: "gf-strut", name: "STRUT／Mirukku 咖啡豆或果醬", search: "스트럿커피 / 미루쿠", note: "STRUT 在田浦" },
+    { id: "gf-hbaf", name: "HBAF 杏仁果禮盒", search: "바프 / HBAF", note: "樂天超市、部分 Olive Young" }
+  ]
+};
+
 const ECATS = [
   { k: "food", label: "餐飲", color: "#B4654A" },
   { k: "transit", label: "交通", color: "#0B6E8F" },
@@ -1024,9 +1061,9 @@ function fbEndpoint() {
    ============================================================ */
 let state = {
   tab: "itin", day: 0, checks: {}, notes: {}, extras: {}, edits: {}, order: {},
-  expenses: [], packing: null, updatedAt: 0,
-  rate: 41, fxOpen: false, fxKrw: "10000", q: "", poolCat: "all", mapCat: "all",
-  addingId: null, editing: null, packInput: "", big: null, me: null, locState: "off", scrollTo: null,
+  expenses: [], packing: null, shopping: null, updatedAt: 0,
+  rate: 41, fxOpen: false, fxKrw: "10000", q: "", poolCat: "all", mapCat: "all", shopSec: "daiso", shopCopied: "",
+  addingId: null, editing: null, packInput: "", big: null, me: null, locState: "off", scrollTo: null, shopEdit: null,
   live: null, mapFail: false, tileFail: false, ttsErr: false, dragId: null,
   form: { name: "", krw: "", cat: "food", tax: null, cur: "KRW" },
   taxOpen: false,
@@ -1044,7 +1081,7 @@ function newId(prefix) { uid++; return prefix + Date.now().toString(36) + uid.to
 
 function payload() {
   return { checks: state.checks, notes: state.notes, extras: state.extras, edits: state.edits, order: state.order,
-    expenses: state.expenses, packing: packList(), rate: state.rate, updatedAt: state.updatedAt };
+    expenses: state.expenses, packing: packList(), shopping: shopList(), rate: state.rate, updatedAt: state.updatedAt };
 }
 function saveLocal() {
   try { localStorage.setItem(KEY, JSON.stringify(payload())); state.saveErr = false; }
@@ -1056,6 +1093,7 @@ function loadLocal() {
     if (s) Object.assign(state, {
       checks: s.checks || {}, notes: s.notes || {}, extras: s.extras || {}, edits: s.edits || {},
       order: s.order || {}, expenses: s.expenses || [], packing: s.packing || null,
+      shopping: s.shopping || null,
       rate: s.rate || 41, updatedAt: s.updatedAt || 0
     });
   } catch (e) {}
@@ -1114,6 +1152,7 @@ async function doPull(force) {
     Object.assign(state, {
       checks: d.checks || {}, notes: d.notes || {}, extras: d.extras || {}, edits: d.edits || {},
       order: d.order || {}, expenses: d.expenses || [], packing: d.packing || packList(),
+      shopping: d.shopping || state.shopping || shopList(),
       rate: d.rate || state.rate, updatedAt: d.updatedAt || Date.now(),
       syncState: "ok", syncAt: Date.now()
     });
@@ -1233,6 +1272,54 @@ function locate() {
 
 /* ---------- itinerary model ---------- */
 function packList() { return state.packing || DEFAULT_PACK.map((t, i) => ({ id: "p" + i, text: t, done: false })); }
+function defaultShop() {
+  const copy = arr => arr.map(x => Object.assign({ want: "", got: 0, done: false }, x));
+  return { daiso: copy(DEFAULT_SHOP.daiso), olive: copy(DEFAULT_SHOP.olive), gift: copy(DEFAULT_SHOP.gift) };
+}
+function shopList() {
+  const s = state.shopping;
+  if (s && Array.isArray(s.daiso) && Array.isArray(s.olive) && Array.isArray(s.gift)) return s;
+  return defaultShop();
+}
+function shopItem(id) {
+  const s = shopList();
+  for (let i = 0; i < SHOP_SECS.length; i++) {
+    const hit = s[SHOP_SECS[i].k].find(x => x.id === id);
+    if (hit) return hit;
+  }
+  return null;
+}
+function patchShopSilent(id, patch) {
+  const s = shopList();
+  const next = { daiso: s.daiso, olive: s.olive, gift: s.gift };
+  SHOP_SECS.forEach(sec => {
+    next[sec.k] = s[sec.k].map(x => x.id === id ? Object.assign({}, x, patch) : x);
+  });
+  state.shopping = next;
+}
+function shopNums(list) {
+  const n = list.length;
+  const checked = list.filter(x => x.done).length;
+  const got = list.reduce((sum, x) => sum + (parseInt(x.got, 10) || 0), 0);
+  return { n, checked, got };
+}
+function saveShopSilent() {
+  state.updatedAt = Date.now();
+  saveLocal();
+  schedulePush();
+}
+function refreshShopCounts() {
+  const shop = shopList();
+  let allN = 0, allC = 0, allG = 0;
+  SHOP_SECS.forEach(sec => {
+    const n = shopNums(shop[sec.k]);
+    allN += n.n; allC += n.checked; allG += n.got;
+    const chip = document.getElementById("shopChip-" + sec.k);
+    if (chip) chip.textContent = n.checked + "/" + n.n;
+  });
+  const sum = document.getElementById("shopAllSum");
+  if (sum) sum.textContent = "共 " + allN + " 項 · 已買數量 " + allG;
+}
 function dayItems(di) {
   const ed = state.edits;
   const base = DAYS[di].items.map((it, i) => Object.assign({}, it, { id: "d" + di + "-" + i }));
@@ -1527,8 +1614,8 @@ function renderNow() {
     setTimeout(() => {
       const el = document.querySelector('[data-item-id="' + target + '"]');
       if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        const inp = el.querySelector("[data-bind-title]");
+        el.scrollIntoView({ behavior: "auto", block: "center" });
+        const inp = el.querySelector("[data-bind-title]") || el.querySelector('[data-bind-shop="name"]');
         if (inp) { try { inp.focus(); } catch (e) {} }
       }
     }, 40);
@@ -1603,6 +1690,7 @@ function renderTabContent() {
   if (state.tab === "itin") return renderItin();
   if (state.tab === "map") return renderMap();
   if (state.tab === "money") return renderMoney();
+  if (state.tab === "shop") return renderShop();
   return renderTools();
 }
 
@@ -1925,6 +2013,93 @@ function renderMoney() {
   </div>`;
 }
 
+function renderShop() {
+  const shop = shopList();
+  const cur = SHOP_SECS.some(s => s.k === state.shopSec) ? state.shopSec : "daiso";
+  const sec = SHOP_SECS.find(s => s.k === cur);
+  const list = shop[cur] || [];
+  const allN = SHOP_SECS.reduce((s, x) => s + shop[x.k].length, 0);
+  const allC = SHOP_SECS.reduce((s, x) => s + shop[x.k].filter(i => i.done).length, 0);
+  const allG = SHOP_SECS.reduce((s, x) => s + shopNums(shop[x.k]).got, 0);
+  const chips = SHOP_SECS.map(sc => {
+    const n = shopNums(shop[sc.k]);
+    const on = sc.k === cur;
+    const c = chip(on);
+    return `<div data-act="pickShopSec" data-id="${sc.k}" style="flex: 0 0 auto; display: flex; align-items: center; gap: 7px; padding: 9px 14px; border-radius: 999px; font-size: 12px; cursor: pointer; border: 1px solid ${c.bd}; background: ${c.bg}; color: ${c.fg};">
+      <span>${sc.label}</span>
+      <span id="shopChip-${sc.k}" style="font-size: 11px; opacity: .65; font-variant-numeric: tabular-nums;">${n.checked}/${n.n}</span>
+    </div>`;
+  }).join("");
+
+  const rows = list.map(it => {
+    const want = it.want == null || it.want === "" ? "" : String(it.want);
+    const got = parseInt(it.got, 10) || 0;
+    const wantN = parseInt(it.want, 10) || 0;
+    const copied = state.shopCopied === it.id;
+    const editing = state.shopEdit === it.id;
+    /* 已達目標用綠色，讓「還差幾個」一眼看得出來 */
+    const hitTarget = wantN > 0 && got >= wantN;
+    const qtyColor = it.done ? "#9AA3A5" : (hitTarget ? "#5F9E72" : (got > 0 ? "#0B6E8F" : "#BCC5C6"));
+
+    if (editing) {
+      /* 編輯態才展開輸入框，平常是純文字，清單才不會變成一長串表單 */
+      return `<div data-item-id="${it.id}" style="border-bottom: 1px solid #EAF3F6; background: #F7FBFC; margin: 0 -16px; padding: 13px 16px;">
+        <input id="shopName-${it.id}" data-bind-shop="name" data-id="${it.id}" value="${esc(it.name || "")}" placeholder="商品名稱" autocomplete="off" enterkeyhint="done" style="width: 100%; border: 1px solid #CFE2EA; border-radius: 12px; padding: 11px 13px; outline: 0; font-size: 14px; font-weight: 500; color: #0F3A4C; background: #fff;" />
+        <input id="shopSearch-${it.id}" data-bind-shop="search" data-id="${it.id}" value="${esc(it.search || "")}" placeholder="店內搜尋字（韓文）" autocomplete="off" style="width: 100%; margin-top: 8px; border: 1px solid #CFE2EA; border-radius: 12px; padding: 11px 13px; outline: 0; font-size: 14px; color: #0B6E8F; background: #fff;" />
+        <input id="shopNote-${it.id}" data-bind-shop="note" data-id="${it.id}" value="${esc(it.note || "")}" placeholder="備註（口味、店名、有沒有貨）" autocomplete="off" style="width: 100%; margin-top: 8px; border: 1px solid #CFE2EA; border-radius: 12px; padding: 11px 13px; outline: 0; font-size: 13px; color: #4A4E55; background: #fff;" />
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+          <label style="flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 7px; background: #fff; border: 1px solid #CFE2EA; border-radius: 12px; padding: 10px 13px;">
+            <span style="font-size: 11px; color: #7E8A8C; white-space: nowrap;">目標數量</span>
+            <input id="shopWant-${it.id}" data-bind-shop="want" data-id="${it.id}" value="${esc(want)}" inputmode="numeric" placeholder="—" style="flex: 1; min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; font-size: 15px; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums;" />
+          </label>
+          <div data-act="deleteShop" data-id="${it.id}" aria-label="刪除這一項" style="flex: 0 0 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: #FBF3F1; border: 1px solid #EEDDD8; color: #B4654A; border-radius: 12px; font-size: 15px; cursor: pointer;">✕</div>
+          <div data-act="doneShopEdit" style="flex: 0 0 76px; height: 44px; display: flex; align-items: center; justify-content: center; background: #0B6E8F; color: #fff; border-radius: 12px; font-size: 13px; font-weight: 500; cursor: pointer;">完成</div>
+        </div>
+      </div>`;
+    }
+
+    return `<div data-item-id="${it.id}" style="border-bottom: 1px solid #EAF3F6; padding: 12px 0;">
+      <div style="display: flex; align-items: center; gap: 11px;">
+        <div data-act="toggleShop" data-id="${it.id}" role="checkbox" aria-checked="${it.done ? "true" : "false"}" aria-label="已買" style="flex: 0 0 26px; height: 26px; border-radius: 999px; border: 1.5px solid ${it.done ? "#0B6E8F" : "#BFD6E0"}; background: ${it.done ? "#0B6E8F" : "#fff"}; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: pointer;">${it.done ? "✓" : ""}</div>
+        <div data-act="editShop" data-id="${it.id}" style="flex: 1; min-width: 0; cursor: pointer;">
+          <div style="font-size: 14px; font-weight: 500; line-height: 1.4; color: ${it.done ? "#9AA3A5" : "#0F3A4C"}; text-decoration: ${it.done ? "line-through" : "none"};">${esc(it.name) || '<span style="color:#BCC5C6">（點這裡輸入商品）</span>'}</div>
+          ${it.note ? `<div style="font-size: 11px; color: #9AA3A5; margin-top: 3px; line-height: 1.55; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${esc(it.note)}</div>` : ""}
+        </div>
+        <div style="flex: 0 0 auto; display: flex; align-items: center; gap: 3px;">
+          <div data-act="shopMinus" data-id="${it.id}" aria-label="減一" style="width: 32px; height: 32px; border-radius: 9px; background: #F2F9FB; border: 1px solid #D9E8EE; color: #7E8A8C; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer;">−</div>
+          <div style="min-width: 40px; text-align: center; font-size: 14px; font-weight: 500; color: ${qtyColor}; white-space: nowrap; font-variant-numeric: tabular-nums;">${got}${wantN > 0 ? `<span style="font-size:11px;color:#BCC5C6;">/${wantN}</span>` : ""}</div>
+          <div data-act="shopPlus" data-id="${it.id}" aria-label="加一" style="width: 32px; height: 32px; border-radius: 9px; background: #E3F0F6; border: 1px solid #C2DCEA; color: #0B6E8F; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer;">＋</div>
+        </div>
+      </div>
+      ${it.search ? `<div data-act="copyShopSearch" data-id="${it.id}" style="display: flex; align-items: center; gap: 8px; margin-top: 8px; margin-left: 37px; background: #F2F9FB; border: 1px solid #D9E8EE; border-radius: 9px; padding: 6px 10px; cursor: pointer;">
+        <span style="flex: 1; min-width: 0; font-size: 12px; color: #0B6E8F; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${esc(it.search)}</span>
+        <span style="flex: 0 0 auto; font-size: 10px; color: ${copied ? "#5F9E72" : "#9AA3A5"};">${copied ? "已複製 ✓" : "複製"}</span>
+      </div>` : ""}
+    </div>`;
+  }).join("");
+
+  return `
+  <div style="padding: 18px 18px 130px;">
+    <div style="font-family: 'Playfair Display', serif; font-size: 26px;">購買清單</div>
+    <div style="background: linear-gradient(135deg, #0F3A4C 0%, #14586F 100%); color: #fff; border-radius: 22px; padding: 17px 18px 15px; margin-top: 14px; box-shadow: 0 8px 22px rgba(11,61,79,.20);">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px;">
+        <span style="font-size: 10px; letter-spacing: .16em; opacity: .62;">已勾項目</span>
+        <span id="shopAllSum" style="font-size: 10px; opacity: .5;">共 ${allN} 項 · 已買數量 ${allG}</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 5px; margin-top: 11px;">
+        <span style="font-family: 'Playfair Display', serif; font-size: 34px; line-height: 1.05; font-variant-numeric: tabular-nums;">${allC}</span>
+        <span style="font-size: 17px; opacity: .55;">/ ${allN}</span>
+      </div>
+    </div>
+    <div class="hscroll" style="gap: 7px; margin-top: 14px; padding-bottom: 4px;">${chips}</div>
+    <div style="background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 20px; padding: 4px 16px 16px; margin-top: 12px;">
+      <div style="font-size: 12px; color: #7E8A8C; line-height: 1.7; padding: 12px 0; border-bottom: 1px solid #EAF3F6;">${sec.hint}</div>
+      ${rows || `<div style="text-align:center;font-size:12px;color:#9AA3A5;padding:26px 0;">這個分類還沒有項目。</div>`}
+      <div data-act="addShop" data-id="${cur}" style="margin-top: 14px; text-align: center; background: #F2F9FB; border: 1px dashed #BCC5C6; border-radius: 12px; padding: 12px 0; font-size: 13px; color: #0B6E8F; cursor: pointer;">＋ 新增一項</div>
+    </div>
+  </div>`;
+}
+
 function renderTools() {
   const pk = packList();
   const packRows = pk.map(p => `<div style="display: flex; align-items: center; gap: 11px; padding: 9px 0; border-bottom: 1px solid #EAF3F6;">
@@ -2080,17 +2255,18 @@ function renderBottomNav() {
     { k: "itin", icon: ICONS.notebook, label: "行程" },
     { k: "map", icon: ICONS.map, label: "地圖" },
     { k: "money", icon: ICONS.money, label: "記帳" },
+    { k: "shop", icon: ICONS.list, label: "清單" },
     { k: "tools", icon: ICONS.bag, label: "工具" }
   ];
   const items = TABS.map(t => {
     const on = state.tab === t.k;
-    return `<div data-act="pickTab" data-id="${t.k}" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 7px 0; border-radius: 14px; cursor: pointer; background: ${on ? "#DDEDF4" : "transparent"};">
-      <span style="display: flex; align-items: center; justify-content: center; width: 34px; height: 28px;"><img src="${t.icon}" alt="" style="max-width: 100%; max-height: 100%; object-fit: contain; display: block; filter: ${on ? "none" : "grayscale(.6) opacity(.55)"}; transition: filter .2s ease;" /></span>
+    return `<div data-act="pickTab" data-id="${t.k}" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 7px 0; border-radius: 14px; cursor: pointer; background: ${on ? "#DDEDF4" : "transparent"}; min-width: 0;">
+      <span class="nav-ico"><img src="${t.icon}" alt="" style="filter: ${on ? "none" : "grayscale(.6) opacity(.55)"};" /></span>
       <span style="font-size: 10px; line-height: 1; color: ${on ? "#0F3A4C" : "#9AA3A5"}; font-weight: ${on ? "500" : "400"};">${t.label}</span>
     </div>`;
   }).join("");
   return `<div style="position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; display: flex; justify-content: center; pointer-events: none;">
-    <div style="width: 100%; max-width: 430px; pointer-events: auto; background: rgba(253,254,255,.95); backdrop-filter: blur(16px); border-top: 1px solid #CFE2EA; display: grid; grid-template-columns: repeat(4, 1fr); padding: 9px 6px calc(9px + env(safe-area-inset-bottom));">${items}</div>
+    <div style="width: 100%; max-width: 430px; pointer-events: auto; background: rgba(253,254,255,.95); backdrop-filter: blur(16px); border-top: 1px solid #CFE2EA; display: grid; grid-template-columns: repeat(${TABS.length}, 1fr); padding: 9px 4px calc(9px + env(safe-area-inset-bottom));">${items}</div>
   </div>`;
 }
 
@@ -2128,6 +2304,13 @@ function bindEvents() {
       if (t.id === "expNameInput") state.form = Object.assign({}, state.form, { name: t.value });
       if (t.id === "packInputEl") state.packInput = t.value;
       if (t.id === "syncMeInput") { state.cfg = Object.assign({}, state.cfg, { me: t.value }); saveCfg(); }
+      const sf = t.getAttribute("data-bind-shop");
+      if (sf) {
+        const sid = t.getAttribute("data-id");
+        let v = t.value;
+        if (sf === "want" || sf === "got") v = v === "" ? (sf === "got" ? 0 : "") : (parseInt(String(v).replace(/[^\d]/g, ""), 10) || 0);
+        patchShopSilent(sid, { [sf]: v });
+      }
     }
     if (renderPending) { renderPending = false; render(); }
   });
@@ -2136,7 +2319,11 @@ function bindEvents() {
 /* Enter 收下編輯、Esc 取消，手機外接鍵盤與桌機都能離開編輯狀態 */
 function onKeyDown(e) {
   const t = e.target;
-  if (!t || !t.id) return;
+  if (!t) return;
+  if (t.getAttribute && t.getAttribute("data-bind-shop") && e.key === "Enter") {
+    e.preventDefault(); t.blur(); return;
+  }
+  if (!t.id) return;
   const isEdit = t.id.indexOf("editTime-") === 0 || t.id.indexOf("editTitle-") === 0;
   if (!isEdit) return;
   if (e.key === "Enter") { e.preventDefault(); t.blur(); }
@@ -2248,6 +2435,61 @@ function onClick(e) {
       setData({ expenses: state.expenses.filter(x => String(x.id) !== String(id)) });
       break;
     }
+    case "pickShopSec": setUI({ shopSec: id, shopCopied: "", shopEdit: null }); break;
+    case "editShop": setUI({ shopEdit: id }); break;
+    case "doneShopEdit": setData({ shopping: state.shopping, shopEdit: null }); break;
+    case "shopPlus": case "shopMinus": {
+      const it = shopItem(id);
+      if (!it) break;
+      const cur2 = parseInt(it.got, 10) || 0;
+      const next = act === "shopPlus" ? cur2 + 1 : Math.max(0, cur2 - 1);
+      /* 只改數量，不動勾選狀態：勾選框維持純手動，避免跟旁邊的勾選框互相打架 */
+      patchShopSilent(id, { got: next });
+      setData({ shopping: state.shopping });
+      break;
+    }
+    case "copyShopSearch": {
+      const it = shopItem(id);
+      const txt = it && (it.search || it.name) || "";
+      if (!txt) break;
+      const done = () => setUI({ shopCopied: id });
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(done).catch(() => { try { window.prompt("複製這段去店內搜", txt); } catch (e) {} });
+      } else {
+        try { window.prompt("複製這段去店內搜", txt); } catch (e) {}
+      }
+      break;
+    }
+    case "toggleShop": {
+      const it = shopItem(id);
+      if (!it) break;
+      patchShopSilent(id, { done: !it.done });
+      setData({ shopping: state.shopping });
+      break;
+    }
+    case "addShop": {
+      const key = id;
+      if (!SHOP_SECS.some(s => s.k === key)) break;
+      const s = shopList();
+      const nid = newId("s");
+      const next = { daiso: s.daiso.slice(), olive: s.olive.slice(), gift: s.gift.slice() };
+      next[key] = next[key].concat([{ id: nid, name: "", want: "", got: 0, done: false, search: "", note: "" }]);
+      setData({ shopping: next, scrollTo: nid, shopEdit: nid });
+      break;
+    }
+    case "deleteShop": {
+      const it = shopItem(id);
+      if (!it) break;
+      if ((it.name || it.search || it.note) && !window.confirm("刪除「" + (it.name || "這一列") + "」？")) break;
+      const s = shopList();
+      const next = {
+        daiso: s.daiso.filter(x => x.id !== id),
+        olive: s.olive.filter(x => x.id !== id),
+        gift: s.gift.filter(x => x.id !== id)
+      };
+      setData({ shopping: next });
+      break;
+    }
     case "togglePack": { const pk = packList(); setData({ packing: pk.map(x => x.id === id ? Object.assign({}, x, { done: !x.done }) : x) }); break; }
     case "deletePack": { const pk = packList(); setData({ packing: pk.filter(x => x.id !== id) }); break; }
     case "addPack": {
@@ -2296,7 +2538,7 @@ function onClick(e) {
       Object.assign(state, {
         checks: d.checks || {}, notes: d.notes || {}, extras: d.extras || {}, edits: d.edits || {},
         order: d.order || {}, expenses: Array.isArray(d.expenses) ? d.expenses : [],
-        packing: d.packing || null, rate: d.rate || state.rate,
+        packing: d.packing || null, shopping: d.shopping || null, rate: d.rate || state.rate,
         importArmed: false, importMsg: "還原成功。"
       });
       setData({});
@@ -2344,7 +2586,7 @@ function onInput(e) {
      若在這時重繪，正在被點的那顆按鈕會在 mousedown 與 click 之間被換掉，
      click 就找不到原本的節點而被吃掉（手機上就是「點第一下沒反應」）。
      input 事件已涵蓋所有輸入，change 直接略過。 */
-  if (e.type === "change" && (t.id === "expKrwInput" || t.id === "poolSearchInput")) return;
+  if (e.type === "change" && (t.id === "expKrwInput" || t.id === "poolSearchInput" || t.getAttribute("data-bind-shop"))) return;
   if (t.id === "fxKrwInput") { state.fxKrw = t.value; render(); return; }
   if (t.id === "rateInput") {
     const v = parseFloat(String(t.value).replace(/,/g, ""));
@@ -2385,6 +2627,14 @@ function onInput(e) {
     if (hint) hint.innerHTML = taxHintHTML();
     return;
   }
+  const shopField = t.getAttribute && t.getAttribute("data-bind-shop");
+  if (shopField) {
+    const sid = t.getAttribute("data-id");
+    let v = t.value;
+    if (shopField === "want" || shopField === "got") v = v === "" ? (shopField === "got" ? 0 : "") : (parseInt(String(v).replace(/[^\d]/g, ""), 10) || 0);
+    patchShopSilent(sid, { [shopField]: v });
+    return;
+  }
   if (t.id === "packInputEl") { state.packInput = t.value; return; }
   if (t.id === "importIn") { state.importText = t.value; state.importArmed = false; return; }
   const timeId = t.getAttribute && t.getAttribute("data-bind-time");
@@ -2412,6 +2662,7 @@ function onBlur(e) {
   if (t.id && t.id.indexOf("editTime-") === 0) { setData({ edits: state.edits, editing: null }); return; }
   if (t.id && t.id.indexOf("editTitle-") === 0) { setData({ edits: state.edits, editing: null }); return; }
   if (t.getAttribute("data-bind-note")) { setData({ notes: state.notes }); return; }
+  if (t.getAttribute("data-bind-shop")) { saveShopSilent(); refreshShopCounts(); return; }
 }
 
 /* ============================================================
