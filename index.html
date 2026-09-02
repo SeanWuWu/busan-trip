@@ -831,6 +831,10 @@ const WX_FALLBACK = [
 ];
 
 const PHRASES = [
+  { kr: "영수증 주세요.", ro: "yeong-su-jeung ju-se-yo", zh: "請給我收據。", big: true },
+  { kr: "미터기로 가 주세요.", ro: "mi-teo-gi-ro ga ju-se-yo", zh: "請按錶跳表。（上車就先說）", big: true },
+  { kr: "요금이 얼마예요?", ro: "yo-geum-i eol-ma-ye-yo?", zh: "車資多少錢？", big: true },
+  { kr: "카드로 계산할게요.", ro: "ka-deu-ro gye-san-hal-ge-yo", zh: "我要刷卡。（刷卡會自動出收據）", big: true },
   { kr: "두 명이요.", ro: "tu myeong-i-yo", zh: "兩位。" },
   { kr: "이거 주세요.", ro: "i-geo ju-se-yo", zh: "請給我這個。（指菜單）" },
   { kr: "안 매운 거 있어요?", ro: "an mae-un geo iss-eo-yo?", zh: "有不辣的嗎？" },
@@ -908,6 +912,11 @@ const ECATS = [
 /* 韓國退稅（查證於 2026/08/31）：同店同日滿 ₩15,000 可退，實際退回約 5~8%（依品項與級距），
    這裡用 7% 粗估，僅供抓預算，實際以退稅單為準。
    即時退稅（店家當場退）單筆上限 ₩100 萬、全程 ₩500 萬；超過就得走機場。 */
+/* 換匯常用金額：對應實際會遇到的價位
+   1,700 地鐵單程／5,000 咖啡或小吃／10,000 一餐／
+   30,000 兩人烤肉／50,000 汗蒸幕加餐／100,000 提款一次 */
+const FX_QUICK = [1700, 5000, 10000, 30000, 50000, 100000, 200000, 500000];
+
 const TAX_MIN = 15000;
 const TAX_PCT = 0.07;
 
@@ -1509,13 +1518,26 @@ function renderTopBar() {
       </div>
     </div>
     ${state.fxOpen ? `
-    <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; padding: 0 18px 14px;">
-      <label style="display: flex; align-items: center; gap: 6px; background: #FDFEFF; border: 1px solid #CFE2EA; border-radius: 12px; padding: 9px 12px;">
-        <span style="font-size: 12px; color: #7E8A8C;">₩</span>
-        <input id="fxKrwInput" data-bind="fxKrw" value="${esc(state.fxKrw)}" inputmode="numeric" placeholder="10000" style="border: 0; outline: 0; width: 100%; background: transparent; font-size: 15px; font-weight: 500;" />
-      </label>
-      <span style="color: #AAB4B5; font-size: 13px;">→</span>
-      <div style="background: #E3F0F6; border-radius: 12px; padding: 10px 12px; font-size: 15px; font-weight: 500; color: #0B6E8F;">NT$ ${nf(fmtKrw / rate)}</div>
+    <div style="padding: 0 18px 14px;">
+      <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px;">
+        <label style="display: flex; align-items: center; gap: 6px; background: #FDFEFF; border: 1px solid #CFE2EA; border-radius: 12px; padding: 9px 12px;">
+          <span style="font-size: 12px; color: #7E8A8C;">₩</span>
+          <input id="fxKrwInput" data-bind="fxKrw" value="${esc(state.fxKrw)}" inputmode="numeric" placeholder="10000" style="border: 0; outline: 0; width: 100%; background: transparent; font-size: 15px; font-weight: 500;" />
+        </label>
+        <span style="color: #AAB4B5; font-size: 13px;">→</span>
+        <div style="background: #E3F0F6; border-radius: 12px; padding: 10px 12px; font-size: 15px; font-weight: 500; color: #0B6E8F;">NT$ ${nf(fmtKrw / rate)}</div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px;">
+        ${FX_QUICK.map(v => {
+          const on = fmtKrw === v;
+          return `<div data-act="pickFxAmt" data-id="${v}" style="text-align: center; border-radius: 10px; padding: 9px 0; font-size: 12px; cursor: pointer; border: 1px solid ${on ? "#0B6E8F" : "#CFE2EA"}; background: ${on ? "#0B6E8F" : "#FDFEFF"}; color: ${on ? "#fff" : "#4A4E55"};">${v >= 10000 ? (v / 10000) + "萬" : nf(v)}</div>`;
+        }).join("")}
+      </div>
+      <div style="display: flex; gap: 6px; margin-top: 6px;">
+        <div data-act="fxTimes" data-id="10" style="flex: 1; text-align: center; border: 1px solid #CFE2EA; background: #FDFEFF; border-radius: 10px; padding: 8px 0; font-size: 12px; color: #0B6E8F; cursor: pointer;">×10</div>
+        <div data-act="fxTimes" data-id="0.1" style="flex: 1; text-align: center; border: 1px solid #CFE2EA; background: #FDFEFF; border-radius: 10px; padding: 8px 0; font-size: 12px; color: #0B6E8F; cursor: pointer;">÷10</div>
+        <div data-act="fxClear" style="flex: 1; text-align: center; border: 1px solid #CFE2EA; background: #FDFEFF; border-radius: 10px; padding: 8px 0; font-size: 12px; color: #9AA3A5; cursor: pointer;">清除</div>
+      </div>
     </div>` : ""}
     <div style="height: 3px; background: linear-gradient(90deg, #0B6E8F 0%, #2790B4 38%, #8CC7DC 68%, #CFE7EF 100%);"></div>
   </div>`;
@@ -1883,7 +1905,7 @@ function renderTools() {
     <div style="flex: 1; font-size: 13px; color: ${p.done ? "#9AA3A5" : "#3A3E45"}; text-decoration: ${p.done ? "line-through" : "none"};">${esc(p.text)}</div>
     <div data-act="deletePack" data-id="${p.id}" style="flex: 0 0 22px; text-align: center; color: #BCC5C6; font-size: 14px; cursor: pointer;">×</div>
   </div>`).join("");
-  const phraseRows = PHRASES.map((p, i) => `<div data-act="showBig" data-id="${i}" style="display: flex; align-items: center; gap: 12px; background: #F2F9FB; border: 1px solid #D9E8EE; border-radius: 14px; padding: 11px 13px; cursor: pointer;">
+  const phraseRows = PHRASES.map((p, i) => `<div data-act="showBig" data-id="${i}" style="display: flex; align-items: center; gap: 12px; background: ${p.big ? "#FFF8EC" : "#F2F9FB"}; border: 1px solid ${p.big ? "#EBD9B8" : "#D9E8EE"}; border-radius: 14px; padding: 11px 13px; cursor: pointer;">
     <div style="flex: 1; min-width: 0;"><div style="font-size: 15px; font-weight: 500;">${esc(p.kr)}</div><div style="font-size: 12px; color: #0B6E8F; margin-top: 4px; font-style: italic;">${esc(p.ro)}</div><div style="font-size: 11px; color: #7E8A8C; margin-top: 3px;">${esc(p.zh)}</div></div>
     <div data-act="sayPhrase" data-id="${i}" style="flex: 0 0 46px; height: 46px; border-radius: 12px; background: #E3F0F6; border: 1px solid #C2DCEA; display: flex; align-items: center; justify-content: center; cursor: pointer;"><img src="${ICONS.speaker}" alt="念出來" style="width: 32px; height: 26px; object-fit: contain;" /></div>
   </div>`).join("");
@@ -1920,6 +1942,33 @@ function renderTools() {
 
     <div style="background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 20px; padding: 16px; margin-top: 14px;">
       <div style="display: flex; justify-content: space-between; align-items: baseline;">
+        <div style="font-size: 14px; font-weight: 500;">行李打包清單</div>
+        <span style="font-size: 11px; color: #7E8A8C;">${pk.filter(p => p.done).length} / ${pk.length}</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 10px;">${packRows}</div>
+      <div style="display: flex; gap: 8px; margin-top: 12px;">
+        <input id="packInputEl" value="${esc(state.packInput || "")}" placeholder="還要帶什麼？" style="flex: 1; min-width: 0; border: 1px solid #CFE2EA; border-radius: 12px; padding: 10px 12px; outline: 0; font-size: 13px;" />
+        <div data-act="addPack" style="flex: 0 0 60px; text-align: center; background: #DDEDF4; border: 1px solid #CFE2EA; border-radius: 12px; padding: 10px 0; font-size: 13px; cursor: pointer;">加入</div>
+      </div>
+    </div>
+
+    <div style="background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 20px; padding: 16px; margin-top: 12px;">
+      <div style="font-size: 14px; font-weight: 500;">韓文小卡</div>
+      <div style="font-size: 12px; color: #7E8A8C; margin-top: 6px; line-height: 1.7;">${state.ttsErr ? "這台裝置不支援語音，請照拼音念。" : "點卡片會放大成大字版，可以直接拿給對方看；點 🔊 讓手機用韓語念出來。"}</div>
+      <div style="font-size: 11px; color: #A87A2B; background: #FFF8EC; border: 1px solid #EBD9B8; border-radius: 10px; padding: 9px 11px; margin-top: 9px; line-height: 1.7;">米色那幾張是搭計程車用的。上車先給司機看「請按錶跳表」，下車要收據就給看「請給我收據」。刷卡付款一定會出收據，比現金保險。</div>
+      <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">${phraseRows}</div>
+    </div>
+
+    <div style="background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 20px; padding: 16px; margin-top: 12px;">
+      <div style="font-size: 14px; font-weight: 500;">地鐵速查</div>
+      <div style="font-size: 11px; color: #7E8A8C; margin-top: 6px; line-height: 1.7;">${origin.label}</div>
+      <div data-act="locateMe" style="margin-top: 11px; text-align: center; border-radius: 12px; padding: 10px 0; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid #C2DCEA; background: ${state.locState === "ok" ? "#0B6E8F" : "#DDEDF4"}; color: ${state.locState === "ok" ? "#fff" : "#0B6E8F"};">${{ wait: "定位中…", ok: "重新定位", err: "無法定位，改用西面" }[state.locState] || "用我目前的位置"}</div>
+      <div style="display: flex; flex-direction: column; gap: 1px; margin-top: 12px;">${metroHtml}</div>
+      <div style="font-size: 11px; color: #9AA3A5; margin-top: 11px; line-height: 1.7;">單程票 1 區間 ₩1,700 / 2 區間 ₩1,900；交通卡（Cashbee、T-money）1 區間 ₩1,600 / 2 區間 ₩1,800，便利商店可買可加值。一日券 ₩5,000（限 1–4 號線，轉金海輕軌、東海線要用交通卡）。上表為交通卡價。票價查證於 2026/08/31，現場以站內公告為準。</div>
+    </div>
+
+    <div style="background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 20px; padding: 16px; margin-top: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;">
         <div style="font-size: 14px; font-weight: 500;">兩人共用同步</div>
         <span style="font-size: 11px; color: ${syncFg[state.syncState] || "#7E8A8C"};">${syncLabels[state.syncState] || "本機儲存"}</span>
       </div>
@@ -1936,32 +1985,6 @@ function renderTools() {
       <div data-act="openBackup" style="margin-top: 11px; text-align: center; border: 1px dashed #B9D5E0; border-radius: 12px; padding: 10px 0; font-size: 12px; color: #0B6E8F; cursor: pointer;">資料備份 / 還原</div>
       <div style="font-size: 10px; color: #BCC5C6; margin-top: 9px; line-height: 1.6;">出發前與回國後各備份一次比較安心。${LAST_SYNC_ERR ? "錯誤：" + esc(LAST_SYNC_ERR) : ""}</div>
       ${state.saveErr ? `<div style="margin-top: 9px; padding: 10px 12px; background: #FBF3F1; border: 1px solid #EEDDD8; border-radius: 12px; font-size: 11px; color: #B4654A; line-height: 1.7;">⚠️ 這台裝置無法寫入本機儲存（可能是無痕模式或空間已滿），目前的修改<b>關掉頁面就會不見</b>。請立刻用上方「資料備份」複製一份。</div>` : ""}
-    </div>
-
-    <div style="background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 20px; padding: 16px; margin-top: 12px;">
-      <div style="display: flex; justify-content: space-between; align-items: baseline;">
-        <div style="font-size: 14px; font-weight: 500;">行李打包清單</div>
-        <span style="font-size: 11px; color: #7E8A8C;">${pk.filter(p => p.done).length} / ${pk.length}</span>
-      </div>
-      <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 10px;">${packRows}</div>
-      <div style="display: flex; gap: 8px; margin-top: 12px;">
-        <input id="packInputEl" value="${esc(state.packInput || "")}" placeholder="還要帶什麼？" style="flex: 1; min-width: 0; border: 1px solid #CFE2EA; border-radius: 12px; padding: 10px 12px; outline: 0; font-size: 13px;" />
-        <div data-act="addPack" style="flex: 0 0 60px; text-align: center; background: #DDEDF4; border: 1px solid #CFE2EA; border-radius: 12px; padding: 10px 0; font-size: 13px; cursor: pointer;">加入</div>
-      </div>
-    </div>
-
-    <div style="background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 20px; padding: 16px; margin-top: 12px;">
-      <div style="font-size: 14px; font-weight: 500;">韓文小卡</div>
-      <div style="font-size: 12px; color: #7E8A8C; margin-top: 6px;">${state.ttsErr ? "這台裝置不支援語音，請照拼音念。" : "點卡片放大，點 🔊 讓手機用韓語念出來。"}</div>
-      <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">${phraseRows}</div>
-    </div>
-
-    <div style="background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 20px; padding: 16px; margin-top: 12px;">
-      <div style="font-size: 14px; font-weight: 500;">地鐵速查</div>
-      <div style="font-size: 11px; color: #7E8A8C; margin-top: 6px; line-height: 1.7;">${origin.label}</div>
-      <div data-act="locateMe" style="margin-top: 11px; text-align: center; border-radius: 12px; padding: 10px 0; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid #C2DCEA; background: ${state.locState === "ok" ? "#0B6E8F" : "#DDEDF4"}; color: ${state.locState === "ok" ? "#fff" : "#0B6E8F"};">${{ wait: "定位中…", ok: "重新定位", err: "無法定位，改用西面" }[state.locState] || "用我目前的位置"}</div>
-      <div style="display: flex; flex-direction: column; gap: 1px; margin-top: 12px;">${metroHtml}</div>
-      <div style="font-size: 11px; color: #9AA3A5; margin-top: 11px; line-height: 1.7;">單程票 1 區間 ₩1,700 / 2 區間 ₩1,900；交通卡（Cashbee、T-money）1 區間 ₩1,600 / 2 區間 ₩1,800，便利商店可買可加值。一日券 ₩5,000（限 1–4 號線，轉金海輕軌、東海線要用交通卡）。上表為交通卡價。票價查證於 2026/08/31，現場以站內公告為準。</div>
     </div>
 
     <div style="background: #F2F9FB; border: 1px dashed #B9D5E0; border-radius: 20px; padding: 16px; margin-top: 12px;">
@@ -2001,15 +2024,22 @@ function renderBigModal() {
   if (state.big === null || state.big === undefined) return "";
   const p = PHRASES[state.big];
   if (!p) return "";
-  return `<div data-act="closeBig" style="position: fixed; inset: 0; z-index: 60; background: rgba(35,38,43,.72); display: flex; align-items: center; justify-content: center; padding: 26px;">
-    <div style="background: #FDFEFF; border-radius: 24px; padding: 30px 24px; text-align: center; max-width: 360px; width: 100%;">
-      <div style="font-size: 30px; font-weight: 700; line-height: 1.4;">${esc(p.kr)}</div>
-      <div style="font-size: 15px; color: #0B6E8F; margin-top: 12px; font-style: italic;">${esc(p.ro)}</div>
-      <div style="font-size: 13px; color: #7E8A8C; margin-top: 10px; line-height: 1.6;">${esc(p.zh)}</div>
-      <div data-act="sayBig" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin: 20px auto 0; max-width: 220px; background: #0B6E8F; color: #fff; border-radius: 14px; padding: 12px 0; font-size: 14px; font-weight: 500; cursor: pointer;">
-        <img src="${ICONS.speaker}" alt="" style="width: 28px; height: 22px; object-fit: contain; filter: brightness(0) invert(1);" />用韓語念出來
+  /* 這張卡是要「拿給韓國人看」的，尤其是計程車司機。
+     所以韓文放到最大、純黑字白底最高對比，長輩隔著座椅也看得清楚。 */
+  return `<div data-act="closeBig" style="position: fixed; inset: 0; z-index: 60; background: rgba(20,22,26,.88); display: flex; align-items: center; justify-content: center; padding: 14px;">
+    <div style="background: #fff; border-radius: 22px; padding: 26px 18px 20px; text-align: center; max-width: 420px; width: 100%; max-height: 92vh; overflow-y: auto;">
+      <div style="font-size: 12px; letter-spacing: .16em; color: #9AA3A5;">請看這裡 · 이것 좀 봐 주세요</div>
+      <div style="font-size: 44px; font-weight: 700; line-height: 1.35; color: #000; margin-top: 14px; word-break: keep-all;">${esc(p.kr)}</div>
+      <div style="font-size: 20px; color: #1E1F22; margin-top: 16px; line-height: 1.5; font-weight: 500;">${esc(p.zh)}</div>
+      <div style="font-size: 15px; color: #0B6E8F; margin-top: 8px; font-style: italic;">${esc(p.ro)}</div>
+      <div data-act="sayBig" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin: 22px auto 0; background: #0B6E8F; color: #fff; border-radius: 14px; padding: 16px 0; font-size: 16px; font-weight: 500; cursor: pointer;">
+        <img src="${ICONS.speaker}" alt="" style="width: 30px; height: 24px; object-fit: contain; filter: brightness(0) invert(1);" />用韓語念出來
       </div>
-      <div data-act="closeBig" style="font-size: 11px; color: #BCC5C6; margin-top: 16px; padding: 8px 0; cursor: pointer;">點外圍或這裡關閉</div>
+      <div style="display: flex; gap: 8px; margin-top: 10px;">
+        <div data-act="bigPrev" style="flex: 1; text-align: center; border: 1px solid #CFE2EA; border-radius: 12px; padding: 12px 0; font-size: 14px; color: #0B6E8F; cursor: pointer;">← 上一張</div>
+        <div data-act="bigNext" style="flex: 1; text-align: center; border: 1px solid #CFE2EA; border-radius: 12px; padding: 12px 0; font-size: 14px; color: #0B6E8F; cursor: pointer;">下一張 →</div>
+      </div>
+      <div data-act="closeBig" style="font-size: 12px; color: #9AA3A5; margin-top: 14px; padding: 10px 0; cursor: pointer;">點外圍或這裡關閉</div>
     </div>
   </div>`;
 }
@@ -2093,6 +2123,14 @@ function onClick(e) {
   if ((act === "closeBig" || act === "closeBackup") && e.target !== el) return;
   switch (act) {
     case "toggleFx": setUI({ fxOpen: !state.fxOpen }); break;
+    case "pickFxAmt": setUI({ fxKrw: String(id) }); break;
+    case "fxTimes": {
+      const cur = parseFloat(String(state.fxKrw).replace(/,/g, "")) || 0;
+      const v = Math.round(cur * parseFloat(id));
+      setUI({ fxKrw: String(v > 0 ? v : "") });
+      break;
+    }
+    case "fxClear": setUI({ fxKrw: "" }); break;
     case "pickDay": setUI({ day: +id }); break;
     case "addBlank": addExtra(state.day, { t: nextSlot(state.day), pid: null, cat: "sight", title: "", desc: "" }, { editTitle: true, toTop: true }); break;
     case "toggleSort": { const o = Object.assign({}, state.order); delete o[state.day]; setData({ order: o }); break; }
@@ -2192,6 +2230,8 @@ function onClick(e) {
     }
     case "showBig": setUI({ big: +id }); break;
     case "sayPhrase": { e.stopPropagation(); const p = PHRASES[+id]; if (p) speak(p.kr); break; }
+    case "bigPrev": { e.stopPropagation(); setUI({ big: (state.big - 1 + PHRASES.length) % PHRASES.length }); break; }
+    case "bigNext": { e.stopPropagation(); setUI({ big: (state.big + 1) % PHRASES.length }); break; }
     case "closeBig": setUI({ big: null }); break;
     case "openBackup": setUI({ backupOpen: true, importArmed: false, importMsg: "", importText: "" }); break;
     case "closeBackup": setUI({ backupOpen: false, importArmed: false, importMsg: "" }); break;
