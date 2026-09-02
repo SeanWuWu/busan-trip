@@ -1905,9 +1905,13 @@ function renderTools() {
     <div style="flex: 1; font-size: 13px; color: ${p.done ? "#9AA3A5" : "#3A3E45"}; text-decoration: ${p.done ? "line-through" : "none"};">${esc(p.text)}</div>
     <div data-act="deletePack" data-id="${p.id}" style="flex: 0 0 22px; text-align: center; color: #BCC5C6; font-size: 14px; cursor: pointer;">×</div>
   </div>`).join("");
-  const phraseRows = PHRASES.map((p, i) => `<div data-act="showBig" data-id="${i}" style="display: flex; align-items: center; gap: 12px; background: ${p.big ? "#FFF8EC" : "#F2F9FB"}; border: 1px solid ${p.big ? "#EBD9B8" : "#D9E8EE"}; border-radius: 14px; padding: 11px 13px; cursor: pointer;">
-    <div style="flex: 1; min-width: 0;"><div style="font-size: 15px; font-weight: 500;">${esc(p.kr)}</div><div style="font-size: 12px; color: #0B6E8F; margin-top: 4px; font-style: italic;">${esc(p.ro)}</div><div style="font-size: 11px; color: #7E8A8C; margin-top: 3px;">${esc(p.zh)}</div></div>
-    <div data-act="sayPhrase" data-id="${i}" style="flex: 0 0 46px; height: 46px; border-radius: 12px; background: #E3F0F6; border: 1px solid #C2DCEA; display: flex; align-items: center; justify-content: center; cursor: pointer;"><img src="${ICONS.speaker}" alt="念出來" style="width: 32px; height: 26px; object-fit: contain;" /></div>
+  /* 雙排格狀：一次看得到比較多張。
+     中文放在最上面（自己掃視找卡最快），韓文在下（真正要給對方看的是放大卡）。
+     羅馬拼音在列表拿掉，改在放大卡呈現，列表才夠緊湊。 */
+  const phraseRows = PHRASES.map((p, i) => `<div data-act="showBig" data-id="${i}" style="position: relative; background: ${p.big ? "#FFF8EC" : "#F2F9FB"}; border: 1px solid ${p.big ? "#EBD9B8" : "#D9E8EE"}; border-radius: 14px; padding: 11px 34px 11px 12px; cursor: pointer; min-height: 76px; display: flex; flex-direction: column; justify-content: center;">
+    <div style="font-size: 12px; color: #4A4E55; line-height: 1.45;">${esc(p.zh)}</div>
+    <div style="font-size: 14px; font-weight: 500; color: #0F3A4C; margin-top: 5px; line-height: 1.4; word-break: keep-all;">${esc(p.kr)}</div>
+    <div data-act="sayPhrase" data-id="${i}" aria-label="念出來" style="position: absolute; top: 0; right: 0; padding: 8px; cursor: pointer;"><span style="display: flex; width: 26px; height: 26px; border-radius: 8px; background: #E3F0F6; border: 1px solid #C2DCEA; align-items: center; justify-content: center;"><img src="${ICONS.speaker}" alt="" style="width: 16px; height: 13px; object-fit: contain;" /></span></div>
   </div>`).join("");
 
   const near = state.me ? STATIONS.slice().sort((a, b) => KM(state.me, a.ll) - KM(state.me, b.ll))[0] : null;
@@ -1956,7 +1960,7 @@ function renderTools() {
       <div style="font-size: 14px; font-weight: 500;">韓文小卡</div>
       <div style="font-size: 12px; color: #7E8A8C; margin-top: 6px; line-height: 1.7;">${state.ttsErr ? "這台裝置不支援語音，請照拼音念。" : "點卡片會放大成大字版，可以直接拿給對方看；點 🔊 讓手機用韓語念出來。"}</div>
       <div style="font-size: 11px; color: #A87A2B; background: #FFF8EC; border: 1px solid #EBD9B8; border-radius: 10px; padding: 9px 11px; margin-top: 9px; line-height: 1.7;">米色那幾張是搭計程車用的。上車先給司機看「請按錶跳表」，下車要收據就給看「請給我收據」。刷卡付款一定會出收據，比現金保險。</div>
-      <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">${phraseRows}</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;">${phraseRows}</div>
     </div>
 
     <div style="background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 20px; padding: 16px; margin-top: 12px;">
