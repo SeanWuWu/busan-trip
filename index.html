@@ -695,6 +695,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
   #app { max-width: 430px; margin: 0 auto; min-height: 100vh; background: #EAF3F6; position: relative; box-shadow: 0 0 70px rgba(3,22,30,.45); }
   .hscroll { display: flex; overflow-x: auto; }
   .grow { flex: 1; min-width: 0; }
+  /* Leaflet 圖層是 position:absolute，容器必須是定位基準，否則標記與圖磚會蓋住整頁 */
+  #mapContainer.leaflet-container {
+    position: relative;
+    overflow: hidden;
+  }
 </style>
 </head>
 <body>
@@ -1031,7 +1036,7 @@ let state = {
 };
 
 let map = null, mapEl = null, markers = {}, mapBootTries = 0, pendingFocus = null, meMarker = null;
-let lastDrawnCat = null, tileErrs = 0;
+let lastDrawnCat = null, lastDrawnQ = null, tileErrs = 0;
 let drag = null, rafPending = false;
 let syncTimer = null, pushTimer = null, applyingRemote = false, syncFails = 0, syncDebounce = null;
 let uid = 0;
@@ -1328,10 +1333,45 @@ function dragPointerUp() {
 }
 
 /* ---------- map ---------- */
+function placeMatch(p) {
+  if (!p) return false;
+  if (state.mapCat !== "all" && p.cat !== state.mapCat) return false;
+  const q = (state.q || "").trim().toLowerCase();
+  if (q && !(p.name + p.kr + p.desc).toLowerCase().includes(q)) return false;
+  return true;
+}
+function scrollMapIntoView() {
+  const mount = document.getElementById("mapMount") || document.getElementById("mapContainer");
+  if (mount) try { mount.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (e) {}
+}
+function flyToPlace(pid) {
+  const p = P(pid);
+  if (!p) return;
+  goTo(p.ll, 15);
+  const m = markers[p.id];
+  if (m) setTimeout(() => { try { m.openPopup(); } catch (e) {} }, 220);
+  scrollMapIntoView();
+}
 function focusOnMap(pid) {
-  if (!pid) { setUI({ tab: "map" }); return; }
+  if (!pid) {
+    if (state.tab !== "map") setUI({ tab: "map" });
+    else scrollMapIntoView();
+    return;
+  }
+  const p = P(pid);
+  const patch = { tab: "map" };
+  if (p) {
+    if (state.mapCat !== "all" && state.mapCat !== p.cat) patch.mapCat = "all";
+    const q = (state.q || "").trim().toLowerCase();
+    if (q && !(p.name + p.kr + p.desc).toLowerCase().includes(q)) patch.q = "";
+  }
   pendingFocus = pid;
-  setUI({ tab: "map" });
+  if (state.tab === "map" && patch.mapCat === undefined && patch.q === undefined) {
+    pendingFocus = null;
+    flyToPlace(pid);
+    return;
+  }
+  setUI(patch);
 }
 /* 地圖容器是一個常駐的 DOM 節點，不隨每次 render 被銷毀重建，
    否則每次天氣回來、每次打勾都會把地圖砍掉重生，畫面會是空白的。 */
@@ -1339,8 +1379,19 @@ function ensureMapEl() {
   if (!mapEl) {
     mapEl = document.createElement("div");
     mapEl.id = "mapContainer";
-    mapEl.style.cssText = "height:68vh;min-height:420px;width:100%;border-radius:22px;overflow:hidden;border:1px solid #CFE2EA;background:#DFEAEE;";
+    mapEl.style.height = "42vh";
+    mapEl.style.minHeight = "260px";
+    mapEl.style.maxHeight = "380px";
+    mapEl.style.width = "100%";
+    mapEl.style.borderRadius = "22px";
+    mapEl.style.overflow = "hidden";
+    mapEl.style.border = "1px solid #CFE2EA";
+    mapEl.style.background = "#DFEAEE";
   }
+  /* 不能每次用 cssText 整段覆蓋：Leaflet 會在 container 上寫入 position:relative，
+     蓋掉之後 pane 會改對 #app 定位，地圖就會飄到整頁上面。 */
+  mapEl.style.position = "relative";
+  mapEl.style.overflow = "hidden";
   return mapEl;
 }
 function kickMapSize() {
@@ -1354,8 +1405,12 @@ function bootMap() {
   const el = ensureMapEl();
   if (!el.isConnected) return;
   if (map) {
-    if (lastDrawnCat !== state.mapCat) drawMarkers();
+    if (lastDrawnCat !== state.mapCat || lastDrawnQ !== (state.q || "")) drawMarkers();
     kickMapSize();
+    if (pendingFocus) {
+      const pid = pendingFocus; pendingFocus = null;
+      flyToPlace(pid);
+    }
     return;
   }
   if (!window.L) {
@@ -1386,8 +1441,8 @@ function bootMap() {
   drawMarkers();
   kickMapSize();
   if (pendingFocus) {
-    const p = P(pendingFocus); pendingFocus = null;
-    if (p) { goTo(p.ll, 15); const m = markers[p.id]; if (m) setTimeout(() => { try { m.openPopup(); } catch (e) {} }, 260); }
+    const pid = pendingFocus; pendingFocus = null;
+    flyToPlace(pid);
   }
 }
 function drawMarkers() {
@@ -1405,8 +1460,7 @@ function drawMarkers() {
     }).addTo(map);
     meMarker.bindPopup('<div style="font-size:13px;font-weight:500">我在這裡</div>');
   }
-  const cat = state.mapCat;
-  PLACES.filter(p => cat === "all" || p.cat === cat).forEach(p => {
+  PLACES.filter(placeMatch).forEach(p => {
     const c = CAT[p.cat];
     const icon = window.L.divIcon({
       className: "", iconSize: [38, 38], iconAnchor: [19, 19],
@@ -1428,6 +1482,7 @@ function drawMarkers() {
     markers[p.id] = m;
   });
   lastDrawnCat = state.mapCat;
+  lastDrawnQ = state.q || "";
 }
 function goTo(ll, z) {
   if (!map || !isFinite(ll[0]) || !isFinite(ll[1])) return;
@@ -1544,9 +1599,9 @@ function renderTopBar() {
 }
 
 function renderTabContent() {
+  if (state.tab === "pool") state.tab = "map";
   if (state.tab === "itin") return renderItin();
   if (state.tab === "map") return renderMap();
-  if (state.tab === "pool") return renderPool();
   if (state.tab === "money") return renderMoney();
   return renderTools();
 }
@@ -1675,14 +1730,15 @@ function renderMap() {
     return `<div data-act="pickMapCat" data-id="${c.k}" style="flex: 0 0 auto; padding: 8px 13px; border-radius: 999px; font-size: 12px; cursor: pointer; border: 1px solid ${s.bd}; background: ${s.bg}; color: ${s.fg};">${c.label}</div>`;
   }).join("");
   const legend = Object.keys(CAT).map(k => `<div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #6C767A;"><span style="width: 9px; height: 9px; border-radius: 99px; background: ${CAT[k].color};"></span>${CAT[k].label}</div>`).join("");
+  const n = PLACES.filter(placeMatch).length;
   return `
   <div style="padding: 18px 0 130px;">
     <div style="padding: 0 18px;">
       <div style="display: flex; align-items: center; gap: 10px;">
-        <div style="font-family: 'Playfair Display', serif; font-size: 26px;">互動地圖</div>
+        <div class="grow" style="font-family: 'Playfair Display', serif; font-size: 26px; line-height: 1.25;">地圖與名單</div>
         <img src="${ICONS.bridge}" alt="" style="width: 74px; height: 44px; object-fit: contain;" />
       </div>
-      <div style="font-size: 12px; color: #7E8A8C; margin-top: 6px;">先跳到區域，再看該區的景點標記。</div>
+      <div style="font-size: 12px; color: #7E8A8C; margin-top: 6px;">上面看位置，下面口袋名單可直接加進行程。</div>
       <div class="hscroll" style="gap: 7px; margin-top: 13px; padding-bottom: 4px;">${districtChips}</div>
       <div class="hscroll" style="gap: 7px; margin-top: 8px; padding-bottom: 4px;">${catChips}</div>
       <div style="display: flex; gap: 8px; margin-top: 10px;">
@@ -1690,51 +1746,22 @@ function renderMap() {
         <div data-act="fitAll" style="flex: 1; text-align: center; border-radius: 12px; padding: 11px 0; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid #C2DCEA; background: #DDEDF4; color: #0B6E8F;">看全部標記</div>
       </div>
     </div>
-    ${state.mapFail ? `<div style="margin: 14px 18px 0; padding: 14px 16px; background: #F2F9FB; border: 1px dashed #B9D5E0; border-radius: 16px; font-size: 12px; color: #7E8A8C; line-height: 1.7;">地圖圖磚載入失敗（可能沒有網路或此環境限制了外部地圖服務）。下方名單與導航按鈕仍可使用。</div>${renderMapFallbackList()}`
+    ${state.mapFail ? `<div style="margin: 14px 18px 0; padding: 14px 16px; background: #F2F9FB; border: 1px dashed #B9D5E0; border-radius: 16px; font-size: 12px; color: #7E8A8C; line-height: 1.7;">地圖圖磚載入失敗（可能沒有網路或此環境限制了外部地圖服務）。下方名單與導航按鈕仍可使用。</div>`
       : `${state.tileFail ? `<div style="margin: 14px 18px 0; padding: 12px 14px; background: #F2F9FB; border: 1px dashed #B9D5E0; border-radius: 14px; font-size: 11px; color: #7E8A8C; line-height: 1.7;">地圖底圖圖磚讀取不到（沒有網路，或此環境擋掉了外部圖磚服務）。標記點與導航按鈕仍可正常使用。</div>` : ""}<div id="mapMount" style="margin: 14px 18px 0;"></div>`}
     <div style="display: flex; flex-wrap: wrap; gap: 10px 16px; padding: 14px 20px 0;">${legend}</div>
-  </div>`;
-}
-
-function renderMapFallbackList() {
-  const cat = state.mapCat;
-  const list = PLACES.filter(p => cat === "all" || p.cat === cat);
-  return `<div style="display: flex; flex-direction: column; gap: 8px; margin: 12px 18px 0;">` + list.map(p => {
-    const c = CAT[p.cat];
-    return `<div style="display: flex; align-items: center; gap: 10px; background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 14px; padding: 11px 13px;">
-      <div style="flex: 1; min-width: 0;"><div style="font-size: 13px; font-weight: 500;">${esc(p.name)}</div><div style="font-size: 11px; color: #9AA3A5; margin-top: 3px;">${esc(p.kr)}</div></div>
-      <span style="flex: 0 0 auto; font-size: 10px; color: ${c.color}; border: 1px solid ${c.bd}; border-radius: 6px; padding: 3px 7px;">${c.label}</span>
-      ${navBtn("naver", naverUrl(p), 38, 10)}
-      ${navBtn("google", googleUrl(p), 38, 10)}
-    </div>`;
-  }).join("") + `</div>`;
-}
-
-function renderPool() {
-  const catList = [{ k: "all", label: "全部" }].concat(Object.keys(CAT).filter(k => k !== "stay").map(k => ({ k, label: CAT[k].label })));
-  const catChips = catList.map(c => {
-    const s = chip(state.poolCat === c.k);
-    return `<div data-act="pickPoolCat" data-id="${c.k}" style="flex: 0 0 auto; padding: 8px 13px; border-radius: 999px; font-size: 12px; cursor: pointer; border: 1px solid ${s.bd}; background: ${s.bg}; color: ${s.fg};">${c.label}</div>`;
-  }).join("");
-  return `
-  <div style="padding: 18px 18px 130px;">
-    <div style="font-family: 'Playfair Display', serif; font-size: 26px;">景點與美食池</div>
-    <div style="font-size: 12px; color: #7E8A8C; margin-top: 6px;">口袋名單，隨走隨停加進任何一天。</div>
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 13px;">
-      <img src="${ICONS.bbq}" alt="" style="width: 100%; height: 74px; object-fit: contain; background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 14px; padding: 5px;" />
-      <img src="${ICONS.seafood}" alt="" style="width: 100%; height: 74px; object-fit: contain; background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 14px; padding: 5px;" />
-      <img src="${ICONS.gukbap}" alt="" style="width: 100%; height: 74px; object-fit: contain; background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 14px; padding: 5px;" />
+    <div style="padding: 18px 18px 0;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px;">
+        <div style="font-size: 15px; font-weight: 500;">口袋名單</div>
+        <div id="placeCount" style="font-size: 11px; color: #7E8A8C;">${n} 個地點</div>
+      </div>
+      <input id="poolSearchInput" data-bind="q" value="${esc(state.q)}" placeholder="搜尋名稱、區域或關鍵字…" style="width: 100%; margin-top: 12px; background: #FDFEFF; border: 1px solid #CFE2EA; border-radius: 14px; padding: 12px 14px; outline: 0; font-size: 14px;" />
     </div>
-    <input id="poolSearchInput" data-bind="q" value="${esc(state.q)}" placeholder="搜尋名稱、區域或關鍵字…" style="width: 100%; margin-top: 14px; background: #FDFEFF; border: 1px solid #CFE2EA; border-radius: 14px; padding: 12px 14px; outline: 0; font-size: 14px;" />
-    <div class="hscroll" style="gap: 7px; margin-top: 12px; padding-bottom: 4px;">${catChips}</div>
-    <div id="poolList" style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">${renderPoolList()}</div>
+    <div id="poolList" style="display: flex; flex-direction: column; gap: 12px; padding: 14px 18px 0;">${renderPoolList()}</div>
   </div>`;
 }
+
 function renderPoolList() {
-  const q = state.q.trim().toLowerCase();
-  const pool = PLACES.filter(p => p.cat !== "stay")
-    .filter(p => state.poolCat === "all" || p.cat === state.poolCat)
-    .filter(p => !q || (p.name + p.kr + p.desc).toLowerCase().includes(q));
+  const pool = PLACES.filter(placeMatch);
   if (!pool.length) return `<div style="text-align: center; font-size: 12px; color: #9AA3A5; padding: 26px 0;">沒有符合的地點。</div>`;
   return pool.map(p => {
     const c = CAT[p.cat], adding = state.addingId === p.id;
@@ -1750,7 +1777,7 @@ function renderPoolList() {
       <div style="font-size: 12px; color: #6C767A; margin-top: 8px; line-height: 1.7;">${esc(p.desc)}</div>
       <div style="display: flex; gap: 8px; margin-top: 13px;">
         <div data-act="startAdd" data-id="${p.id}" style="flex: 1; text-align: center; background: #0B6E8F; color: #fff; border-radius: 11px; padding: 9px 0; font-size: 12px; font-weight: 500; cursor: pointer;">${adding ? "選擇哪一天" : "加入行程"}</div>
-        <div data-act="focusOnMap" data-id="${p.id}" style="flex: 0 0 78px; text-align: center; background: #DDEDF4; border: 1px solid #CFE2EA; border-radius: 11px; padding: 9px 0; font-size: 12px; cursor: pointer;">地圖</div>
+        <div data-act="focusOnMap" data-id="${p.id}" style="flex: 0 0 78px; text-align: center; background: #DDEDF4; border: 1px solid #CFE2EA; border-radius: 11px; padding: 9px 0; font-size: 12px; cursor: pointer;">看位置</div>
         ${navBtn("naver", naverUrl(p), 42, 11)}
         ${navBtn("google", googleUrl(p), 42, 11)}
       </div>
@@ -2052,7 +2079,6 @@ function renderBottomNav() {
   const TABS = [
     { k: "itin", icon: ICONS.notebook, label: "行程" },
     { k: "map", icon: ICONS.map, label: "地圖" },
-    { k: "pool", icon: ICONS.list, label: "名單" },
     { k: "money", icon: ICONS.money, label: "記帳" },
     { k: "tools", icon: ICONS.bag, label: "工具" }
   ];
@@ -2064,7 +2090,7 @@ function renderBottomNav() {
     </div>`;
   }).join("");
   return `<div style="position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; display: flex; justify-content: center; pointer-events: none;">
-    <div style="width: 100%; max-width: 430px; pointer-events: auto; background: rgba(253,254,255,.95); backdrop-filter: blur(16px); border-top: 1px solid #CFE2EA; display: grid; grid-template-columns: repeat(5, 1fr); padding: 9px 6px calc(9px + env(safe-area-inset-bottom));">${items}</div>
+    <div style="width: 100%; max-width: 430px; pointer-events: auto; background: rgba(253,254,255,.95); backdrop-filter: blur(16px); border-top: 1px solid #CFE2EA; display: grid; grid-template-columns: repeat(4, 1fr); padding: 9px 6px calc(9px + env(safe-area-inset-bottom));">${items}</div>
   </div>`;
 }
 
@@ -2177,13 +2203,13 @@ function onClick(e) {
     case "pickDistrict": { const d = DISTRICTS[+id]; if (d) goTo(d.ll, d.z); break; }
     case "fitAll": {
       if (!map || !window.L) break;
-      const pts = PLACES.filter(p => state.mapCat === "all" || p.cat === state.mapCat).map(p => p.ll);
+      const pts = PLACES.filter(placeMatch).map(p => p.ll);
       if (state.me) pts.push(state.me);
       if (pts.length) { try { map.fitBounds(window.L.latLngBounds(pts).pad(0.15), { animate: false }); } catch (e) {} }
       break;
     }
-    case "pickMapCat": setUI({ mapCat: id }); break;
-    case "pickPoolCat": setUI({ poolCat: id }); break;
+    case "pickMapCat": setUI({ mapCat: id, poolCat: id }); break;
+    case "pickPoolCat": setUI({ mapCat: id, poolCat: id }); break;
     case "startAdd": setUI({ addingId: state.addingId === id ? null : id }); break;
     case "addToDay": {
       const p = P(id); const di = +el.getAttribute("data-day");
@@ -2290,8 +2316,9 @@ function onClick(e) {
       break;
     }
     case "pickTab": {
-      if (id !== state.tab) { try { history.pushState({ tab: id }, ""); } catch (e) {} }
-      setUI({ tab: id });
+      const tab = id === "pool" ? "map" : id;
+      if (tab !== state.tab) { try { history.pushState({ tab }, ""); } catch (e) {} }
+      setUI({ tab });
       break;
     }
   }
@@ -2324,7 +2351,15 @@ function onInput(e) {
     state.rate = (isFinite(v) && v > 0) ? v : t.value;
     state.rateManual = true; saveCfg(); setData({ rate: state.rate }); return;
   }
-  if (t.id === "poolSearchInput") { state.q = t.value; document.getElementById("poolList").innerHTML = renderPoolList(); return; }
+  if (t.id === "poolSearchInput") {
+    state.q = t.value;
+    const list = document.getElementById("poolList");
+    if (list) list.innerHTML = renderPoolList();
+    const count = document.getElementById("placeCount");
+    if (count) count.textContent = PLACES.filter(placeMatch).length + " 個地點";
+    drawMarkers();
+    return;
+  }
   if (t.id === "syncMeInput") {
     const had = !!(state.cfg.me || "").trim();
     state.cfg = Object.assign({}, state.cfg, { me: t.value });
@@ -2438,7 +2473,8 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && st
   try {
     history.replaceState({ tab: state.tab }, "");
     window.addEventListener("popstate", e => {
-      const t = e.state && e.state.tab;
+      let t = e.state && e.state.tab;
+      if (t === "pool") t = "map";
       if (t && t !== state.tab) { state.tab = t; render(); }
     });
   } catch (e) {}
