@@ -932,15 +932,39 @@ const DEFAULT_SHOP = {
     { id: "oy-birch", name: "Round Lab 白樺樹防曬", search: "라운드랩 자작나무 선크림", note: "SPF50+，質地偏乳液" }
   ],
   gift: [
-    { id: "gf-bada", name: "Busan Bada Sand 奶油夾心餅", search: "부산바다샌드", note: "海理團路／甘川洞；賣完提早關" },
-    { id: "gf-keveren", name: "Keveren House 奶油派", search: "캐버린하우스", note: "與 Bada Sand 同一巷" },
-    { id: "gf-cheffle", name: "CHEFFLE 起司舒芙蕾", search: "치플레", note: "廣安里常設店；Centum 先確認" },
-    { id: "gf-ops", name: "OPS 烘焙屋點心", search: "옵스", note: "海雲台站 1 號出口；看常溫保存" },
-    { id: "gf-bc", name: "B&C 派饅頭／黃豆粉年糕麵包", search: "비엔씨제과", note: "釜山站 2 樓；年糕麵包效期短" },
-    { id: "gf-2dae", name: "二代名菓煎餅", search: "이대명과", note: "海雲台店，近 OPS；常溫好帶" },
-    { id: "gf-clam", name: "Clam Sand／HEEMA 夾心餅", search: "클램샌드 / 히마스토어", note: "分店不固定，現場搜" },
-    { id: "gf-strut", name: "STRUT／Mirukku 咖啡豆或果醬", search: "스트럿커피 / 미루쿠", note: "STRUT 在田浦" },
-    { id: "gf-hbaf", name: "HBAF 杏仁果禮盒", search: "바프 / HBAF", note: "樂天超市、部分 Olive Young" }
+    { id: "gf-bada", name: "Busan Bada Sand 奶油夾心餅", search: "부산바다샌드", note: "認白熊；約 11:00–19:00，賣完提早關", spots: [
+      { label: "海雲台本店", q: "부산바다샌드 해운대" },
+      { label: "甘川洞", q: "부산바다샌드 감천문화마을" }
+    ] },
+    { id: "gf-keveren", name: "Keveren House 奶油派", search: "캐버린하우스", note: "與 Bada Sand 同一巷；約 11:00–20:00", spots: [
+      { label: "海雲台", q: "캐버린하우스 해운대" }
+    ] },
+    { id: "gf-cheffle", name: "CHEFFLE 起司舒芙蕾", search: "치플레", note: "廣安里常設店；Centum 是專櫃／快閃，去前先確認", spots: [
+      { label: "廣安里常設店", q: "치플레 광안리" },
+      { label: "新世界 Centum", q: "치플레 신세계 센텀시티" }
+    ] },
+    { id: "gf-ops", name: "OPS 烘焙屋點心", search: "옵스", note: "海雲台站 1 號出口步行約 5–6 分；看常溫保存", spots: [
+      { label: "海雲台店", q: "옵스 해운대점" }
+    ] },
+    { id: "gf-bc", name: "B&C 派饅頭／黃豆粉年糕麵包", search: "비엔씨제과", note: "派饅頭適合伴手禮；年糕麵包效期短", spots: [
+      { label: "釜山站 2 樓", q: "비엔씨제과 부산역점" },
+      { label: "南浦", q: "비엔씨제과 남포" }
+    ] },
+    { id: "gf-2dae", name: "二代名菓煎餅", search: "이대명과", note: "近 OPS；烘烤非油炸，常溫好帶", spots: [
+      { label: "海雲台店", q: "이대명과 해운대점" }
+    ] },
+    { id: "gf-clam", name: "Clam Sand／HEEMA 夾心餅", search: "클램샌드", note: "分店較不固定，海雲台、海理團路現場搜", spots: [
+      { label: "Clam Sand", q: "클램샌드 부산" },
+      { label: "HEEMA STORE", q: "히마스토어 부산" }
+    ] },
+    { id: "gf-strut", name: "STRUT／Mirukku 咖啡豆或果醬", search: "스트럿커피", note: "STRUT 在田浦站 8 號出口步行約 5 分", spots: [
+      { label: "STRUT 田浦", q: "스트럿커피" },
+      { label: "Mirukku", q: "미루쿠 커피 부산" }
+    ] },
+    { id: "gf-hbaf", name: "HBAF 杏仁果禮盒", search: "바프 / HBAF", note: "樂天超市、部分 Olive Young；店內找「바프」", spots: [
+      { label: "光復樂天", q: "롯데마트 광복점" },
+      { label: "海雲台樂天", q: "롯데마트 해운대" }
+    ] }
   ]
 };
 
@@ -1310,15 +1334,11 @@ function saveShopSilent() {
 }
 function refreshShopCounts() {
   const shop = shopList();
-  let allN = 0, allC = 0, allG = 0;
   SHOP_SECS.forEach(sec => {
     const n = shopNums(shop[sec.k]);
-    allN += n.n; allC += n.checked; allG += n.got;
     const chip = document.getElementById("shopChip-" + sec.k);
     if (chip) chip.textContent = n.checked + "/" + n.n;
   });
-  const sum = document.getElementById("shopAllSum");
-  if (sum) sum.textContent = "共 " + allN + " 項 · 已買數量 " + allG;
 }
 function dayItems(di) {
   const ed = state.edits;
@@ -2013,20 +2033,41 @@ function renderMoney() {
   </div>`;
 }
 
+/* 分店地圖：先看項目自帶的 spots，舊的存檔沒有就回 DEFAULT_SHOP 查，
+   使用者自己新增的項目則用它的名稱或搜尋字當查詢。 */
+function shopSpots(it) {
+  if (it && Array.isArray(it.spots) && it.spots.length) return it.spots;
+  const base = DEFAULT_SHOP.gift.find(x => x.id === (it && it.id));
+  if (base && Array.isArray(base.spots)) return base.spots;
+  const q = cleanSearchText((it && it.search) || "") || cleanSearchText((it && it.name) || "");
+  return q ? [{ label: "地圖", q: q }] : [];
+}
+function shopSpotsHTML(it) {
+  const spots = shopSpots(it);
+  if (!spots.length) return "";
+  const one = spots.length === 1;
+  return spots.map(sp => {
+    const nav = "https://map.naver.com/p/search/" + encodeURIComponent(sp.q);
+    const goo = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(sp.q + " 부산");
+    return `<div style="display: flex; align-items: center; gap: 7px; margin-top: 7px; margin-left: 37px;">
+      <span style="flex: 1; min-width: 0; font-size: 11px; color: ${one ? "#9AA3A5" : "#4A4E55"}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${esc(sp.label)}</span>
+      ${navBtn("naver", nav, 30, 9)}
+      ${navBtn("google", goo, 30, 9)}
+    </div>`;
+  }).join("");
+}
+
 function renderShop() {
   const shop = shopList();
   const cur = SHOP_SECS.some(s => s.k === state.shopSec) ? state.shopSec : "daiso";
   const sec = SHOP_SECS.find(s => s.k === cur);
   const list = shop[cur] || [];
-  const allN = SHOP_SECS.reduce((s, x) => s + shop[x.k].length, 0);
-  const allC = SHOP_SECS.reduce((s, x) => s + shop[x.k].filter(i => i.done).length, 0);
-  const allG = SHOP_SECS.reduce((s, x) => s + shopNums(shop[x.k]).got, 0);
   const chips = SHOP_SECS.map(sc => {
     const n = shopNums(shop[sc.k]);
     const on = sc.k === cur;
     const c = chip(on);
-    return `<div data-act="pickShopSec" data-id="${sc.k}" style="flex: 0 0 auto; display: flex; align-items: center; gap: 7px; padding: 9px 14px; border-radius: 999px; font-size: 12px; cursor: pointer; border: 1px solid ${c.bd}; background: ${c.bg}; color: ${c.fg};">
-      <span>${sc.label}</span>
+    return `<div data-act="pickShopSec" data-id="${sc.k}" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 10px 4px; border-radius: 14px; cursor: pointer; border: 1px solid ${c.bd}; background: ${c.bg}; color: ${c.fg}; min-width: 0;">
+      <span style="font-size: 13px; font-weight: 500; white-space: nowrap;">${sc.label}</span>
       <span id="shopChip-${sc.k}" style="font-size: 11px; opacity: .65; font-variant-numeric: tabular-nums;">${n.checked}/${n.n}</span>
     </div>`;
   }).join("");
@@ -2075,23 +2116,14 @@ function renderShop() {
         <span style="flex: 1; min-width: 0; font-size: 12px; color: #0B6E8F; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${esc(it.search)}</span>
         <span style="flex: 0 0 auto; font-size: 10px; color: ${copied ? "#5F9E72" : "#9AA3A5"};">${copied ? "已複製 ✓" : "複製"}</span>
       </div>` : ""}
+      ${cur === "gift" ? shopSpotsHTML(it) : ""}
     </div>`;
   }).join("");
 
   return `
   <div style="padding: 18px 18px 130px;">
-    <div style="font-family: 'Playfair Display', serif; font-size: 26px;">購買清單</div>
-    <div style="background: linear-gradient(135deg, #0F3A4C 0%, #14586F 100%); color: #fff; border-radius: 22px; padding: 17px 18px 15px; margin-top: 14px; box-shadow: 0 8px 22px rgba(11,61,79,.20);">
-      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px;">
-        <span style="font-size: 10px; letter-spacing: .16em; opacity: .62;">已勾項目</span>
-        <span id="shopAllSum" style="font-size: 10px; opacity: .5;">共 ${allN} 項 · 已買數量 ${allG}</span>
-      </div>
-      <div style="display: flex; align-items: baseline; gap: 5px; margin-top: 11px;">
-        <span style="font-family: 'Playfair Display', serif; font-size: 34px; line-height: 1.05; font-variant-numeric: tabular-nums;">${allC}</span>
-        <span style="font-size: 17px; opacity: .55;">/ ${allN}</span>
-      </div>
-    </div>
-    <div class="hscroll" style="gap: 7px; margin-top: 14px; padding-bottom: 4px;">${chips}</div>
+    <div style="font-family: 'Playfair Display', serif; font-size: 26px;">戰利品</div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 14px;">${chips}</div>
     <div style="background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 20px; padding: 4px 16px 16px; margin-top: 12px;">
       <div style="font-size: 12px; color: #7E8A8C; line-height: 1.7; padding: 12px 0; border-bottom: 1px solid #EAF3F6;">${sec.hint}</div>
       ${rows || `<div style="text-align:center;font-size:12px;color:#9AA3A5;padding:26px 0;">這個分類還沒有項目。</div>`}
@@ -2255,7 +2287,7 @@ function renderBottomNav() {
     { k: "itin", icon: ICONS.notebook, label: "行程" },
     { k: "map", icon: ICONS.map, label: "地圖" },
     { k: "money", icon: ICONS.money, label: "記帳" },
-    { k: "shop", icon: ICONS.list, label: "清單" },
+    { k: "shop", icon: ICONS.list, label: "戰利品" },
     { k: "tools", icon: ICONS.bag, label: "工具" }
   ];
   const items = TABS.map(t => {
