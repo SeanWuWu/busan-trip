@@ -932,7 +932,7 @@ const DEFAULT_SHOP = {
     { id: "oy-birch", name: "Round Lab 白樺樹防曬", search: "라운드랩 자작나무 선크림", note: "SPF50+，質地偏乳液" }
   ],
   gift: [
-    { id: "gf-bada", name: "Busan Bada Sand 奶油夾心餅", search: "부산바다샌드", note: "認白熊；約 11:00–19:00，賣完提早關", spots: [
+    { id: "gf-bada", name: "Bada Sand 奶油夾心餅", search: "부산바다샌드", note: "認白熊；約 11:00–19:00，賣完提早關", spots: [
       { label: "海雲台本店", q: "부산바다샌드 해운대" },
       { label: "甘川洞", q: "부산바다샌드 감천문화마을" }
     ] },
@@ -946,18 +946,18 @@ const DEFAULT_SHOP = {
     { id: "gf-ops", name: "OPS 烘焙屋點心", search: "옵스", note: "海雲台站 1 號出口步行約 5–6 分；看常溫保存", spots: [
       { label: "海雲台店", q: "옵스 해운대점" }
     ] },
-    { id: "gf-bc", name: "B&C 派饅頭／黃豆粉年糕麵包", search: "비엔씨제과", note: "派饅頭適合伴手禮；年糕麵包效期短", spots: [
+    { id: "gf-bc", name: "B&C 派饅頭、年糕麵包", search: "비엔씨제과", note: "派饅頭適合伴手禮；年糕麵包效期短", spots: [
       { label: "釜山站 2 樓", q: "비엔씨제과 부산역점" },
       { label: "南浦", q: "비엔씨제과 남포" }
     ] },
     { id: "gf-2dae", name: "二代名菓煎餅", search: "이대명과", note: "近 OPS；烘烤非油炸，常溫好帶", spots: [
       { label: "海雲台店", q: "이대명과 해운대점" }
     ] },
-    { id: "gf-clam", name: "Clam Sand／HEEMA 夾心餅", search: "클램샌드", note: "分店較不固定，海雲台、海理團路現場搜", spots: [
+    { id: "gf-clam", name: "Clam Sand／HEEMA 餅乾", search: "클램샌드", note: "分店較不固定，海雲台、海理團路現場搜", spots: [
       { label: "Clam Sand", q: "클램샌드 부산" },
       { label: "HEEMA STORE", q: "히마스토어 부산" }
     ] },
-    { id: "gf-strut", name: "STRUT／Mirukku 咖啡豆或果醬", search: "스트럿커피", note: "STRUT 在田浦站 8 號出口步行約 5 分", spots: [
+    { id: "gf-strut", name: "STRUT／Mirukku 咖啡豆", search: "스트럿커피", note: "STRUT 在田浦站 8 號出口步行約 5 分", spots: [
       { label: "STRUT 田浦", q: "스트럿커피" },
       { label: "Mirukku", q: "미루쿠 커피 부산" }
     ] },
@@ -2035,6 +2035,37 @@ function renderMoney() {
 
 /* 分店地圖：先看項目自帶的 spots，舊的存檔沒有就回 DEFAULT_SHOP 查，
    使用者自己新增的項目則用它的名稱或搜尋字當查詢。 */
+/* 伴手禮縮圖：自己畫的 inline SVG，不用外部圖片。
+   店家官網與觀光局的照片都是 all rights reserved，抓來放會變成轉散布別人的圖，
+   所以這裡用同一套配色手繪，風格才跟整個 App 一致，也不會有版權問題。
+   每張都是 40x40 的 viewBox，外框圓角由容器負責。 */
+const GIFT_ART = {
+  /* 奶油夾心餅：兩片餅乾夾一層奶油，認白熊所以左上角一隻小熊 */
+  "gf-bada": '<svg viewBox="0 0 40 40" width="100%" height="100%"><rect width="40" height="40" fill="#E8F1F5"/><rect x="7" y="12" width="26" height="6" rx="2" fill="#D9A566"/><rect x="7" y="18" width="26" height="5" fill="#FFF6E4"/><rect x="7" y="23" width="26" height="6" rx="2" fill="#D9A566"/><circle cx="12" cy="15" r="1" fill="#B8823F"/><circle cx="28" cy="15" r="1" fill="#B8823F"/><circle cx="31" cy="9" r="4" fill="#fff" stroke="#BFD6E0"/><circle cx="29.4" cy="8.4" r="0.7" fill="#0F3A4C"/><circle cx="32.6" cy="8.4" r="0.7" fill="#0F3A4C"/><ellipse cx="31" cy="10.4" rx="1.2" ry="0.9" fill="#BFD6E0"/></svg>',
+  /* 奶油派：圓派加放射狀酥皮紋 */
+  "gf-keveren": '<svg viewBox="0 0 40 40" width="100%" height="100%"><rect width="40" height="40" fill="#F5EFE6"/><circle cx="20" cy="20" r="13" fill="#E0B87C"/><circle cx="20" cy="20" r="9" fill="#F2D9A8"/><g stroke="#D9A566" stroke-width="1.4" stroke-linecap="round"><path d="M20 11v18M11 20h18M13.6 13.6l12.8 12.8M26.4 13.6L13.6 26.4"/></g><circle cx="20" cy="20" r="3" fill="#FFF6E4"/></svg>',
+  /* 起司舒芙蕾：高身圓模，上面微微膨起 */
+  "gf-cheffle": '<svg viewBox="0 0 40 40" width="100%" height="100%"><rect width="40" height="40" fill="#FBF4E8"/><path d="M10 20q10-9 20 0v9a3 3 0 0 1-3 3H13a3 3 0 0 1-3-3z" fill="#F0C97A"/><path d="M10 20q10-9 20 0z" fill="#FFE1A3"/><rect x="9" y="19" width="22" height="3" rx="1.5" fill="#E3A855"/><path d="M16 27h8" stroke="#D9A566" stroke-width="1.4" stroke-linecap="round"/></svg>',
+  /* 烘焙屋：可頌 */
+  "gf-ops": '<svg viewBox="0 0 40 40" width="100%" height="100%"><rect width="40" height="40" fill="#F3EDE3"/><path d="M8 25q4-12 12-12t12 12q-5-3-12-3t-12 3z" fill="#DFA75F"/><path d="M14 21q6-5 12 0" stroke="#B8823F" stroke-width="1.3" fill="none" stroke-linecap="round"/><path d="M11 24q3-8 9-8t9 8" stroke="#C9924C" stroke-width="1.2" fill="none"/></svg>',
+  /* 派饅頭：包子外形加十字摺紋 */
+  "gf-bc": '<svg viewBox="0 0 40 40" width="100%" height="100%"><rect width="40" height="40" fill="#EEF2F0"/><ellipse cx="20" cy="23" rx="13" ry="10" fill="#FFF8ED"/><ellipse cx="20" cy="23" rx="13" ry="10" fill="none" stroke="#E0D6C4"/><path d="M20 14v18M11 21q9 5 18 0" stroke="#DCCBB0" stroke-width="1.3" fill="none" stroke-linecap="round"/><ellipse cx="20" cy="15" rx="3" ry="1.6" fill="#E8DCC6"/></svg>',
+  /* 煎餅：疊起來的薄脆片 */
+  "gf-2dae": '<svg viewBox="0 0 40 40" width="100%" height="100%"><rect width="40" height="40" fill="#F6F0E4"/><ellipse cx="20" cy="26" rx="12" ry="4.5" fill="#D9A566"/><ellipse cx="20" cy="22" rx="12" ry="4.5" fill="#E8BC81"/><ellipse cx="20" cy="18" rx="12" ry="4.5" fill="#F2D3A0"/><circle cx="16" cy="17.5" r="0.9" fill="#C98C46"/><circle cx="23" cy="18.5" r="0.9" fill="#C98C46"/><circle cx="20" cy="16.5" r="0.8" fill="#C98C46"/></svg>',
+  /* 貝殼夾心餅：扇貝造型 */
+  "gf-clam": '<svg viewBox="0 0 40 40" width="100%" height="100%"><rect width="40" height="40" fill="#E9F0F4"/><path d="M20 29q-11 0-11-8a11 8 0 0 1 22 0q0 8-11 8z" fill="#F2D9A8"/><g stroke="#D9A566" stroke-width="1.2" fill="none" stroke-linecap="round"><path d="M20 29V13M20 29l-7-11M20 29l7-11M20 29l-9.6-7M20 29l9.6-7"/></g></svg>',
+  /* 咖啡豆與果醬罐 */
+  "gf-strut": '<svg viewBox="0 0 40 40" width="100%" height="100%"><rect width="40" height="40" fill="#EDE7E0"/><rect x="20" y="14" width="12" height="17" rx="2.5" fill="#C9603F"/><rect x="21.5" y="12" width="9" height="3" rx="1" fill="#8C4A32"/><rect x="21.5" y="20" width="9" height="6" rx="1" fill="#FFF3E0"/><ellipse cx="13" cy="20" rx="5.5" ry="7" fill="#6B4A34" transform="rotate(-20 13 20)"/><path d="M13 13.5q-2 6.5 0 13" stroke="#3E2A1D" stroke-width="1.4" fill="none" stroke-linecap="round" transform="rotate(-20 13 20)"/></svg>',
+  /* 杏仁果禮盒 */
+  "gf-hbaf": '<svg viewBox="0 0 40 40" width="100%" height="100%"><rect width="40" height="40" fill="#F0EEE6"/><rect x="8" y="17" width="24" height="15" rx="2.5" fill="#E4B45C"/><rect x="8" y="14" width="24" height="5" rx="2" fill="#C99440"/><ellipse cx="15" cy="24" rx="3.2" ry="4" fill="#F5E3C0" transform="rotate(-18 15 24)"/><ellipse cx="21" cy="26" rx="3.2" ry="4" fill="#EFD5AC" transform="rotate(12 21 26)"/><ellipse cx="26.5" cy="23.5" rx="3.2" ry="4" fill="#F5E3C0" transform="rotate(-8 26.5 23.5)"/></svg>'
+};
+function giftArt(it) {
+  const key = it && it.id;
+  if (key && GIFT_ART[key]) return GIFT_ART[key];
+  /* 自訂項目沒有對應插圖，用一個中性的購物袋 */
+  return '<svg viewBox="0 0 40 40" width="100%" height="100%"><rect width="40" height="40" fill="#EAF3F6"/><path d="M12 16h16l-1.5 15a2 2 0 0 1-2 1.8H15.5a2 2 0 0 1-2-1.8z" fill="#BFD6E0"/><path d="M16 17v-3a4 4 0 0 1 8 0v3" stroke="#8FA9B5" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>';
+}
+
 function shopSpots(it) {
   if (it && Array.isArray(it.spots) && it.spots.length) return it.spots;
   const base = DEFAULT_SHOP.gift.find(x => x.id === (it && it.id));
@@ -2049,7 +2080,7 @@ function shopSpotsHTML(it) {
   return spots.map(sp => {
     const nav = "https://map.naver.com/p/search/" + encodeURIComponent(sp.q);
     const goo = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(sp.q + " 부산");
-    return `<div style="display: flex; align-items: center; gap: 7px; margin-top: 7px; margin-left: 37px;">
+    return `<div style="display: flex; align-items: center; gap: 7px; margin-top: 7px; margin-left: 74px;">
       <span style="flex: 1; min-width: 0; font-size: 11px; color: ${one ? "#9AA3A5" : "#4A4E55"}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${esc(sp.label)}</span>
       ${navBtn("naver", nav, 30, 9)}
       ${navBtn("google", goo, 30, 9)}
@@ -2100,8 +2131,9 @@ function renderShop() {
     }
 
     return `<div data-item-id="${it.id}" style="border-bottom: 1px solid #EAF3F6; padding: 12px 0;">
-      <div style="display: flex; align-items: center; gap: 11px;">
+      <div style="display: flex; align-items: center; gap: ${cur === "gift" ? 8 : 11}px;">
         <div data-act="toggleShop" data-id="${it.id}" role="checkbox" aria-checked="${it.done ? "true" : "false"}" aria-label="已買" style="flex: 0 0 26px; height: 26px; border-radius: 999px; border: 1.5px solid ${it.done ? "#0B6E8F" : "#BFD6E0"}; background: ${it.done ? "#0B6E8F" : "#fff"}; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: pointer;">${it.done ? "✓" : ""}</div>
+        ${cur === "gift" ? `<div data-act="editShop" data-id="${it.id}" style="flex: 0 0 32px; width: 32px; height: 32px; border-radius: 9px; overflow: hidden; border: 1px solid #E3EDF1; cursor: pointer; opacity: ${it.done ? ".45" : "1"};">${giftArt(it)}</div>` : ""}
         <div data-act="editShop" data-id="${it.id}" style="flex: 1; min-width: 0; cursor: pointer;">
           <div style="font-size: 14px; font-weight: 500; line-height: 1.4; color: ${it.done ? "#9AA3A5" : "#0F3A4C"}; text-decoration: ${it.done ? "line-through" : "none"};">${esc(it.name) || '<span style="color:#BCC5C6">（點這裡輸入商品）</span>'}</div>
           ${it.note ? `<div style="font-size: 11px; color: #9AA3A5; margin-top: 3px; line-height: 1.55; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${esc(it.note)}</div>` : ""}
@@ -2112,7 +2144,7 @@ function renderShop() {
           <div data-act="shopPlus" data-id="${it.id}" aria-label="加一" style="width: 32px; height: 32px; border-radius: 9px; background: #E3F0F6; border: 1px solid #C2DCEA; color: #0B6E8F; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer;">＋</div>
         </div>
       </div>
-      ${it.search ? `<div data-act="copyShopSearch" data-id="${it.id}" style="display: flex; align-items: center; gap: 8px; margin-top: 8px; margin-left: 37px; background: #F2F9FB; border: 1px solid #D9E8EE; border-radius: 9px; padding: 6px 10px; cursor: pointer;">
+      ${it.search ? `<div data-act="copyShopSearch" data-id="${it.id}" style="display: flex; align-items: center; gap: 8px; margin-top: 8px; margin-left: ${cur === "gift" ? 74 : 37}px; background: #F2F9FB; border: 1px solid #D9E8EE; border-radius: 9px; padding: 6px 10px; cursor: pointer;">
         <span style="flex: 1; min-width: 0; font-size: 12px; color: #0B6E8F; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${esc(it.search)}</span>
         <span style="flex: 0 0 auto; font-size: 10px; color: ${copied ? "#5F9E72" : "#9AA3A5"};">${copied ? "已複製 ✓" : "複製"}</span>
       </div>` : ""}
