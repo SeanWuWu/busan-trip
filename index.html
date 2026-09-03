@@ -737,7 +737,8 @@ const CAT = {
   cafe:  { label: "咖啡", color: "#8A6D3F", bd: "#E9DFCC", bg: "#F7F1E6" },
   bread: { label: "麵包", color: "#A2703F", bd: "#EDDFCD", bg: "#F9F1E6" },
   shop:  { label: "購物", color: "#5F7A6B", bd: "#D8E4DC", bg: "#EDF3EF" },
-  stay:  { label: "住宿", color: "#0F3A4C", bd: "#DCDCD6", bg: "#F0F0EC" }
+  stay:  { label: "住宿", color: "#0F3A4C", bd: "#DCDCD6", bg: "#F0F0EC" },
+  gift:  { label: "戰利品", color: "#8C5A7D", bd: "#E5D5E0", bg: "#F6EEF3" }
 };
 
 const TRIP_YEAR = 2026;
@@ -751,6 +752,16 @@ const todayISO = () => { const d = new Date(); return d.getFullYear() + "-" + pa
 const WCODE = c => c === 0 ? "晴" : c <= 2 ? "多雲時晴" : c === 3 ? "陰" : c <= 48 ? "起霧" : c <= 57 ? "毛毛雨" : c <= 67 ? "下雨" : c <= 77 ? "下雪" : c <= 82 ? "陣雨" : c <= 86 ? "陣雪" : "雷雨";
 
 const PLACES = [
+  /* 伴手禮店家：座標由 OpenStreetMap 對手冊上的地址地理編碼而來，
+     用來把點標在地圖上；導航連結一律走韓文店名搜尋，命中率比丟座標高。 */
+  { id: "gf-bada", name: "Bada Sand 奶油夾心餅", kr: "부산바다샌드", cat: "gift", ll: [35.1649, 129.1589], desc: "海理團路本店，認白熊。約 11:00–19:00，賣完提早關。" },
+  { id: "gf-keveren", name: "Keveren House 奶油派", kr: "캐버린하우스", cat: "gift", ll: [35.1648, 129.1587], desc: "與 Bada Sand 同一巷。約 11:00–20:00。" },
+  { id: "gf-cheffle", name: "CHEFFLE 起司舒芙蕾", kr: "치플레", cat: "gift", ll: [35.1576, 129.1217], desc: "廣安里常設店。新世界 Centum 那邊是專櫃／快閃，去前先確認。" },
+  { id: "gf-ops", name: "OPS 烘焙屋（海雲台）", kr: "옵스 해운대점", cat: "gift", ll: [35.1628, 129.1629], desc: "海雲台站 1 號出口步行約 5–6 分。看常溫保存的品項才好帶。" },
+  { id: "gf-2dae", name: "二代名菓煎餅", kr: "이대명과 해운대점", cat: "gift", ll: [35.1626, 129.1630], desc: "近 OPS。烘烤非油炸，常溫好帶。" },
+  { id: "gf-bc", name: "B&C 派饅頭（釜山站）", kr: "비엔씨제과 부산역점", cat: "gift", ll: [35.1152, 129.0398], desc: "釜山站 2 樓，最方便。派饅頭適合伴手禮，年糕麵包效期短。" },
+  { id: "gf-strut", name: "STRUT COFFEE（田浦）", kr: "스트럿커피", cat: "gift", ll: [35.1540, 129.0673], desc: "田浦站 8 號出口步行約 5 分。咖啡豆可帶回台灣。" },
+  { id: "gf-lotte", name: "樂天百貨 光復店（HBAF）", kr: "롯데백화점 광복점", cat: "gift", ll: [35.0971, 129.0364], desc: "地下超市找「바프／HBAF」杏仁果。南浦洞逆市場順路。" },
   { id: "hotel", name: "麗尼斯飯店 西面", kr: "레니스호텔 서면", cat: "stay", ll: [35.1567, 129.0594], desc: "四晚基地。地鐵西面站 7 號出口步行 3 分鐘，樓下就是不夜的西面街區。" },
   { id: "underground", name: "西面地下街", kr: "서면지하상가", cat: "shop", ll: [35.1580, 129.0592], desc: "連通地鐵站的平價服飾襪子小物。下雨或太熱時整段都在室內，很適合殺時間。" },
   { id: "oliveyoung", name: "Olive Young 西面旗艦店", kr: "올리브영 서면", cat: "shop", ll: [35.1571, 129.0603], desc: "美妝面膜補貨大本營。店內可退稅（同店同日滿 ₩15,000 起），營業到深夜 22:30 左右。" },
@@ -968,12 +979,21 @@ const DEFAULT_SHOP = {
   ]
 };
 
+/* noTax：這類支出本來就不適用韓國退稅——台灣刷卡付的機票、住宿、eSIM，
+   以及在韓國的交通與餐飲。標了就不再跟你提退稅，清單也不會被雜訊塎滿。 */
 const ECATS = [
-  { k: "food", label: "餐飲", color: "#B4654A" },
-  { k: "transit", label: "交通", color: "#0B6E8F" },
+  { k: "food", label: "餐飲", color: "#B4654A", noTax: true },
+  { k: "transit", label: "交通", color: "#0B6E8F", noTax: true },
   { k: "shop", label: "購物", color: "#5F7A6B" },
+  { k: "stay", label: "住宿", color: "#4A6D8C", noTax: true },
+  { k: "prep", label: "行前", color: "#7A6A96", noTax: true },
   { k: "other", label: "其他", color: "#8A6D3F" }
 ];
+const ecat = k => ECATS.find(c => c.k === k) || ECATS[ECATS.length - 1];
+/* 退稅只對「在韓國買東西」有意義：分類標了 noTax 或付台幣，都不提退稅。 */
+function taxEligible(cat, cur) {
+  return !ecat(cat).noTax && (cur || "KRW") !== "TWD";
+}
 
 /* 韓國退稅（查證於 2026/08/31）：同店同日滿 ₩15,000 可退，實際退回約 5~8%（依品項與級距），
    這裡用 7% 粗估，僅供抓預算，實際以退稅單為準。
@@ -1696,8 +1716,8 @@ function renderTopBar() {
         }).join("")}
       </div>
       <div style="display: flex; gap: 6px; margin-top: 6px;">
-        <div data-act="fxTimes" data-id="10" style="flex: 1; text-align: center; border: 1px solid #CFE2EA; background: #FDFEFF; border-radius: 10px; padding: 8px 0; font-size: 12px; color: #0B6E8F; cursor: pointer;">×10</div>
-        <div data-act="fxTimes" data-id="0.1" style="flex: 1; text-align: center; border: 1px solid #CFE2EA; background: #FDFEFF; border-radius: 10px; padding: 8px 0; font-size: 12px; color: #0B6E8F; cursor: pointer;">÷10</div>
+        <div data-act="fxAdd" data-id="1000" style="flex: 1; text-align: center; border: 1px solid #CFE2EA; background: #FDFEFF; border-radius: 10px; padding: 8px 0; font-size: 12px; color: #0B6E8F; cursor: pointer;">+1,000</div>
+        <div data-act="fxAdd" data-id="-1000" style="flex: 1; text-align: center; border: 1px solid #CFE2EA; background: #FDFEFF; border-radius: 10px; padding: 8px 0; font-size: 12px; color: #0B6E8F; cursor: pointer;">−1,000</div>
         <div data-act="fxClear" style="flex: 1; text-align: center; border: 1px solid #CFE2EA; background: #FDFEFF; border-radius: 10px; padding: 8px 0; font-size: 12px; color: #9AA3A5; cursor: pointer;">清除</div>
       </div>
     </div>` : ""}
@@ -1713,6 +1733,11 @@ function renderTabContent() {
   if (state.tab === "shop") return renderShop();
   return renderTools();
 }
+
+/* 行程頁右上角的小圖：每天用那天的主題圖，
+   不要五天都長一樣。陣列長度跟 DAYS 對齊，超出就回 notebook。 */
+const DAY_ICONS = [ICONS.airport, ICONS.seafood, ICONS.bbq, ICONS.bridge, ICONS.gukbap];
+const dayIcon = i => DAY_ICONS[i] || ICONS.notebook;
 
 function renderItin() {
   const di = state.day;
@@ -1772,7 +1797,7 @@ function renderItin() {
     <div style="padding: 20px 18px 0;">
       <div style="display: flex; align-items: center; gap: 10px;">
         <div class="grow" style="font-family: 'Playfair Display', serif; font-size: 26px; line-height: 1.25;">${esc(day.title)}</div>
-        <img src="${ICONS.notebook}" alt="" style="flex: 0 0 62px; width: 62px; height: 46px; object-fit: contain;" />
+        <img src="${dayIcon(di)}" alt="" style="flex: 0 0 62px; width: 62px; height: 46px; object-fit: contain;" />
       </div>
       <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
         <div style="flex: 1; height: 4px; background: #CFE2EA; border-radius: 99px; overflow: hidden;">
@@ -1848,7 +1873,7 @@ function renderMap() {
       </div>
       <div style="font-size: 12px; color: #7E8A8C; margin-top: 6px;">上面看位置，下面口袋名單可直接加進行程。</div>
       <div class="hscroll" style="gap: 7px; margin-top: 13px; padding-bottom: 4px;">${districtChips}</div>
-      <div class="hscroll" style="gap: 7px; margin-top: 8px; padding-bottom: 4px;">${catChips}</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px;">${catChips}</div>
       <div style="display: flex; gap: 8px; margin-top: 10px;">
         <div data-act="locateMe" style="flex: 1; text-align: center; border-radius: 12px; padding: 11px 0; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid #C2DCEA; background: ${state.locState === "ok" ? "#0B6E8F" : "#DDEDF4"}; color: ${state.locState === "ok" ? "#fff" : "#0B6E8F"};">${{ wait: "定位中…", ok: "我的位置", err: "無法定位" }[state.locState] || "定位我的位置"}</div>
         <div data-act="fitAll" style="flex: 1; text-align: center; border-radius: 12px; padding: 11px 0; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid #C2DCEA; background: #DDEDF4; color: #0B6E8F;">看全部標記</div>
@@ -1899,6 +1924,8 @@ function taxHintHTML() {
   let krw = parseFloat(String(state.form.krw || "").replace(/,/g, "")) || 0;
   if ((state.form.cur || "KRW") === "TWD") krw = krw * (parseFloat(state.rate) || 41);
   if (krw < TAX_MIN) return "";
+  /* 機票、住宿、eSIM、交通、餐飲本來就不能退，不用問 */
+  if (!taxEligible(state.form.cat, state.form.cur)) return "";
   const cur = state.form.tax || null;
   const btn = (k, label) => {
     const on = cur === k;
@@ -1960,16 +1987,16 @@ function renderMoney() {
   }).join("");
   const catOpts = ECATS.map(c => {
     const s = chip(state.form.cat === c.k);
-    return `<div data-act="pickExpCat" data-id="${c.k}" style="flex: 1; text-align: center; border-radius: 11px; padding: 9px 0; font-size: 12px; cursor: pointer; border: 1px solid ${s.bd}; background: ${s.bg}; color: ${s.fg};">${c.label}</div>`;
+    return `<div data-act="pickExpCat" data-id="${c.k}" style="text-align: center; border-radius: 11px; padding: 9px 0; font-size: 12px; cursor: pointer; border: 1px solid ${s.bd}; background: ${s.bg}; color: ${s.fg};">${c.label}</div>`;
   }).join("");
   const expenseRows = state.expenses.map(e => {
-    const c = ECATS.find(x => x.k === e.cat) || ECATS[3];
+    const c = ecat(e.cat);
     /* 退稅標籤：有標記就顯示狀態，沒標記但金額過門檻就給一個很淡的補標入口，
        金額不到門檻完全不顯示，避免清單被雜訊塞滿 */
     let taxTag = "";
     if (e.tax === "todo") taxTag = `<span data-act="cycleExpTax" data-id="${e.id}" style="display: inline-block; margin-left: 7px; background: #FBF0DA; color: #A87A2B; border-radius: 7px; padding: 2px 7px; font-size: 10px; cursor: pointer;">待退稅</span>`;
     else if (e.tax === "done") taxTag = `<span data-act="cycleExpTax" data-id="${e.id}" style="display: inline-block; margin-left: 7px; background: #E3F1E7; color: #4A8560; border-radius: 7px; padding: 2px 7px; font-size: 10px; cursor: pointer;">✓ 已退稅</span>`;
-    else if (e.krw >= TAX_MIN) taxTag = `<span data-act="cycleExpTax" data-id="${e.id}" style="display: inline-block; margin-left: 7px; color: #C3CBCD; border: 1px solid #E4EFF3; border-radius: 7px; padding: 2px 7px; font-size: 10px; cursor: pointer;">＋退稅</span>`;
+    else if (e.krw >= TAX_MIN && taxEligible(e.cat, e.cur)) taxTag = `<span data-act="cycleExpTax" data-id="${e.id}" style="display: inline-block; margin-left: 7px; color: #C3CBCD; border: 1px solid #E4EFF3; border-radius: 7px; padding: 2px 7px; font-size: 10px; cursor: pointer;">＋退稅</span>`;
     return `<div style="display: flex; align-items: center; gap: 12px; background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 16px; padding: 13px 15px;">
       <div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 500;">${esc(e.name)}</div><div style="font-size: 11px; color: #9AA3A5; margin-top: 3px;">${c.label}${taxTag}</div></div>
       <div style="text-align: right;">${e.cur === "TWD"
@@ -2024,7 +2051,7 @@ function renderMoney() {
         </label>
         <div id="expTwdOut" style="flex: 0 0 104px; text-align: right; font-size: 12px; color: #0B6E8F;">${expConvHint(state.form.krw, state.form.cur, rate)}</div>
       </div>
-      <div style="display: flex; gap: 6px; margin-top: 10px;">${catOpts}</div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px;">${catOpts}</div>
       <div id="expTaxHint">${taxHintHTML()}</div>
       <div data-act="addExpense" style="margin-top: 13px; text-align: center; background: #0B6E8F; color: #fff; border-radius: 13px; padding: 13px 0; font-size: 14px; font-weight: 500; cursor: pointer;">記一筆</div>
     </div>
@@ -2405,9 +2432,10 @@ function onClick(e) {
   switch (act) {
     case "toggleFx": setUI({ fxOpen: !state.fxOpen }); break;
     case "pickFxAmt": setUI({ fxKrw: String(id) }); break;
-    case "fxTimes": {
+    case "fxAdd": {
       const cur = parseFloat(String(state.fxKrw).replace(/,/g, "")) || 0;
-      const v = Math.round(cur * parseFloat(id));
+      /* 不讓金額跟到負數，減到 0 就清空 */
+      const v = Math.max(0, cur + parseInt(id, 10));
       setUI({ fxKrw: String(v > 0 ? v : "") });
       break;
     }
@@ -2467,7 +2495,13 @@ function onClick(e) {
       if (p) addExtra(di, { t: nextSlot(di), pid: p.id, cat: p.cat, title: p.name, desc: p.desc }, { jump: true });
       break;
     }
-    case "pickExpCat": setUI({ form: Object.assign({}, state.form, { cat: id }) }); break;
+    case "pickExpCat": {
+      const f = Object.assign({}, state.form, { cat: id });
+      /* 切到不可退稅的分類，就把已選的退稅標記清掉，不要偷存進去 */
+      if (!taxEligible(f.cat, f.cur)) f.tax = null;
+      setUI({ form: f });
+      break;
+    }
     case "pickExpCur": setUI({ form: Object.assign({}, state.form, { cur: id }) }); break;
     case "addExpense": {
       const amt = parseFloat(String(state.form.krw || "").replace(/,/g, "")) || 0;
@@ -2479,7 +2513,7 @@ function onClick(e) {
       const krw = cur === "TWD" ? Math.round(amt * r) : amt;
       const exp = { id: newId("e"), name: (state.form.name || "").trim() || "未命名", krw, cat: state.form.cat };
       if (cur === "TWD") { exp.cur = "TWD"; exp.amt = amt; }
-      if (krw >= TAX_MIN && state.form.tax) exp.tax = state.form.tax;
+      if (krw >= TAX_MIN && state.form.tax && taxEligible(state.form.cat, cur)) exp.tax = state.form.tax;
       state.form = Object.assign({}, state.form, { name: "", krw: "", tax: null });
       setData({ expenses: [exp].concat(state.expenses) });
       break;
