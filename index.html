@@ -998,10 +998,19 @@ function taxEligible(cat, cur) {
 /* 韓國退稅（查證於 2026/08/31）：同店同日滿 ₩15,000 可退，實際退回約 5~8%（依品項與級距），
    這裡用 7% 粗估，僅供抓預算，實際以退稅單為準。
    即時退稅（店家當場退）單筆上限 ₩100 萬、全程 ₩500 萬；超過就得走機場。 */
-/* 換匯常用金額：對應實際會遇到的價位
-   1,700 地鐵單程／5,000 咖啡或小吃／10,000 一餐／
-   30,000 兩人烤肉／50,000 汗蒸幕加餐／100,000 提款一次 */
-const FX_QUICK = [1700, 5000, 10000, 30000, 50000, 100000, 200000, 500000];
+/* 換匯常用金額：兩個方向各用各的。
+   韓圓側對應在釜山會看到的標價：
+     1,700 地鐵單程／5,000 咖啡或小吃／10,000 一餐／
+     30,000 兩人烤肉／50,000 汗蒸幕加餐／100,000 提款一次
+   台幣側對應「我手上有 X 元，換得到多少韓幣」：
+     100／300 小額試算／500／1,000 一餐到半天／
+     2,000／3,000 一天預算／5,000／10,000 換匯或提款一次 */
+const FX_QUICK = {
+  KRW: [1700, 5000, 10000, 30000, 50000, 100000, 200000, 500000],
+  TWD: [100, 300, 500, 1000, 2000, 3000, 5000, 10000]
+};
+/* 加減鍵的級距：韓圓跳 1,000（約 NT$23），台幣跳 100。 */
+const FX_STEP = { KRW: 1000, TWD: 100 };
 
 const TAX_MIN = 15000;
 const TAX_PCT = 0.07;
@@ -1106,7 +1115,7 @@ function fbEndpoint() {
 let state = {
   tab: "itin", day: 0, checks: {}, notes: {}, extras: {}, edits: {}, order: {},
   expenses: [], packing: null, shopping: null, updatedAt: 0,
-  rate: 41, fxOpen: false, fxKrw: "10000", q: "", poolCat: "all", mapCat: "all", shopSec: "daiso", shopCopied: "",
+  rate: 41, fxOpen: false, fxKrw: "10000", fxDir: "KRW", q: "", poolCat: "all", mapCat: "all", shopSec: "daiso", shopCopied: "",
   addingId: null, editing: null, packInput: "", big: null, me: null, locState: "off", scrollTo: null, shopEdit: null,
   live: null, mapFail: false, tileFail: false, ttsErr: false, dragId: null,
   form: { name: "", krw: "", cat: "food", tax: null, cur: "KRW" },
@@ -1670,7 +1679,6 @@ function renderTopBar() {
   const wx = state.live || WX_FALLBACK[state.day] || WX_FALLBACK[0];
   const syncLabels = { off: "本機儲存", wait: "連線中…", ok: "已同步", err: "同步失敗", unsupported: "本機儲存" };
   const syncDots = { off: "#C9CDD4", wait: "#D8A34A", ok: "#5F9E72", err: "#C4614A", unsupported: "#C9CDD4" };
-  const fmtKrw = parseFloat(String(state.fxKrw).replace(/,/g, "")) || 0;
   const rate = parseFloat(state.rate) || 41;
   return `
   <div style="position: sticky; top: 0; z-index: 40; background: rgba(234,243,246,.94); backdrop-filter: blur(14px); border-bottom: 1px solid #D8E8EE;">
@@ -1699,28 +1707,46 @@ function renderTopBar() {
         </div>
       </div>
     </div>
-    ${state.fxOpen ? `
+    ${state.fxOpen ? (() => {
+      /* fxDir 決定哪邊是輸入、哪邊是結果。
+         KRW = 輸入韓圓看台幣（在店裡看標價）
+         TWD = 輸入台幣看韓圓（換匯前估預算） */
+      const dir = state.fxDir === "TWD" ? "TWD" : "KRW";
+      const amt = parseFloat(String(state.fxKrw).replace(/,/g, "")) || 0;
+      const out = dir === "KRW" ? amt / rate : amt * rate;
+      const inSym = dir === "KRW" ? "₩" : "NT$";
+      const outSym = dir === "KRW" ? "NT$" : "₩";
+      const step = FX_STEP[dir];
+      const quick = FX_QUICK[dir];
+      const stepLabel = nf(step);
+      return `
     <div style="padding: 0 18px 14px;">
       <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px;">
         <label style="display: flex; align-items: center; gap: 6px; background: #FDFEFF; border: 1px solid #CFE2EA; border-radius: 12px; padding: 9px 12px;">
-          <span style="font-size: 12px; color: #7E8A8C;">₩</span>
-          <input id="fxKrwInput" data-bind="fxKrw" value="${esc(state.fxKrw)}" inputmode="numeric" placeholder="10000" style="border: 0; outline: 0; width: 100%; background: transparent; font-size: 15px; font-weight: 500;" />
+          <span style="font-size: 12px; color: #7E8A8C; white-space: nowrap;">${inSym}</span>
+          <input id="fxKrwInput" data-bind="fxKrw" value="${esc(state.fxKrw)}" inputmode="numeric" placeholder="${dir === "KRW" ? "10000" : "1000"}" style="border: 0; outline: 0; width: 100%; min-width: 0; background: transparent; font-size: 15px; font-weight: 500;" />
         </label>
-        <span style="color: #AAB4B5; font-size: 13px;">→</span>
-        <div style="background: #E3F0F6; border-radius: 12px; padding: 10px 12px; font-size: 15px; font-weight: 500; color: #0B6E8F;">NT$ ${nf(fmtKrw / rate)}</div>
+        <div data-act="fxSwap" role="button" aria-label="對調換算方向" style="flex: 0 0 auto; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: #0B6E8F; color: #fff; font-size: 14px; cursor: pointer; box-shadow: 0 2px 8px rgba(11,110,143,.25);">⇄</div>
+        <div style="background: #E3F0F6; border-radius: 12px; padding: 10px 12px; font-size: 15px; font-weight: 500; color: #0B6E8F; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${outSym} ${nf(out)}</div>
       </div>
-      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px;">
-        ${FX_QUICK.map(v => {
-          const on = fmtKrw === v;
-          return `<div data-act="pickFxAmt" data-id="${v}" style="text-align: center; border-radius: 10px; padding: 9px 0; font-size: 12px; cursor: pointer; border: 1px solid ${on ? "#0B6E8F" : "#CFE2EA"}; background: ${on ? "#0B6E8F" : "#FDFEFF"}; color: ${on ? "#fff" : "#4A4E55"};">${v >= 10000 ? (v / 10000) + "萬" : nf(v)}</div>`;
+      <div style="font-size: 10px; color: #9AA3A5; margin-top: 7px; text-align: center;">${dir === "KRW" ? "韓圓 → 台幣（店裡看標價）" : "台幣 → 韓圓（換匯前估預算）"} · 點中間 ⇄ 對調</div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 9px;">
+        ${quick.map(v => {
+          const on = amt === v;
+          /* 韓圓上萬用「萬」縮寫，台幣數字小直接寫完 */
+          const label = (dir === "KRW" && v >= 10000) ? (v / 10000) + "萬" : nf(v);
+          return `<div data-act="pickFxAmt" data-id="${v}" style="text-align: center; border-radius: 10px; padding: 9px 0; font-size: 12px; cursor: pointer; border: 1px solid ${on ? "#0B6E8F" : "#CFE2EA"}; background: ${on ? "#0B6E8F" : "#FDFEFF"}; color: ${on ? "#fff" : "#4A4E55"};">${label}</div>`;
         }).join("")}
       </div>
-      <div style="display: flex; gap: 6px; margin-top: 6px;">
-        <div data-act="fxAdd" data-id="1000" style="flex: 1; text-align: center; border: 1px solid #CFE2EA; background: #FDFEFF; border-radius: 10px; padding: 8px 0; font-size: 12px; color: #0B6E8F; cursor: pointer;">+1,000</div>
-        <div data-act="fxAdd" data-id="-1000" style="flex: 1; text-align: center; border: 1px solid #CFE2EA; background: #FDFEFF; border-radius: 10px; padding: 8px 0; font-size: 12px; color: #0B6E8F; cursor: pointer;">−1,000</div>
-        <div data-act="fxClear" style="flex: 1; text-align: center; border: 1px solid #CFE2EA; background: #FDFEFF; border-radius: 10px; padding: 8px 0; font-size: 12px; color: #9AA3A5; cursor: pointer;">清除</div>
+      <div style="height: 1px; background: #D8E8EE; margin: 11px 0 9px;"></div>
+      <div style="display: flex; align-items: center; gap: 7px;">
+        <span style="flex: 0 0 auto; font-size: 10px; color: #9AA3A5;">微調</span>
+        <div data-act="fxAdd" data-id="${-step}" style="flex: 1; text-align: center; background: #0F3A4C; color: #fff; border-radius: 11px; padding: 10px 0; font-size: 13px; font-weight: 500; cursor: pointer;">−${stepLabel}</div>
+        <div data-act="fxAdd" data-id="${step}" style="flex: 1; text-align: center; background: #0F3A4C; color: #fff; border-radius: 11px; padding: 10px 0; font-size: 13px; font-weight: 500; cursor: pointer;">＋${stepLabel}</div>
+        <div data-act="fxClear" style="flex: 0 0 62px; text-align: center; background: #FDFEFF; border: 1px solid #CFE2EA; border-radius: 11px; padding: 9px 0; font-size: 12px; color: #9AA3A5; cursor: pointer;">清除</div>
       </div>
-    </div>` : ""}
+    </div>`;
+    })() : ""}
     <div style="height: 3px; background: linear-gradient(90deg, #0B6E8F 0%, #2790B4 38%, #8CC7DC 68%, #CFE7EF 100%);"></div>
   </div>`;
 }
@@ -2432,6 +2458,16 @@ function onClick(e) {
   switch (act) {
     case "toggleFx": setUI({ fxOpen: !state.fxOpen }); break;
     case "pickFxAmt": setUI({ fxKrw: String(id) }); break;
+    case "fxSwap": {
+      /* 對調方向時把目前的換算結果帶到輸入格，
+         畫面上的兩個數字才不會跳掉——看起來就是兩邊互換。 */
+      const rateNow = parseFloat(state.rate) || 41;
+      const cur = parseFloat(String(state.fxKrw).replace(/,/g, "")) || 0;
+      const next = state.fxDir === "TWD" ? "KRW" : "TWD";
+      const conv = state.fxDir === "TWD" ? cur * rateNow : cur / rateNow;
+      setUI({ fxDir: next, fxKrw: cur ? String(Math.round(conv)) : "" });
+      break;
+    }
     case "fxAdd": {
       const cur = parseFloat(String(state.fxKrw).replace(/,/g, "")) || 0;
       /* 不讓金額跟到負數，減到 0 就清空 */
