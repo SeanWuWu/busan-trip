@@ -1115,7 +1115,7 @@ function fbEndpoint() {
 let state = {
   tab: "itin", day: 0, checks: {}, notes: {}, extras: {}, edits: {}, order: {},
   expenses: [], packing: null, shopping: null, updatedAt: 0,
-  rate: 41, fxOpen: false, fxKrw: "10000", fxDir: "KRW", q: "", poolCat: "all", mapCat: "all", shopSec: "daiso", shopCopied: "",
+  rate: 41, fxOpen: false, fxKrw: "10000", fxDir: "KRW", wxOpen: false, fcTpe: null, q: "", poolCat: "all", mapCat: "all", shopSec: "daiso", shopCopied: "",
   addingId: null, editing: null, packInput: "", big: null, me: null, locState: "off", scrollTo: null, shopEdit: null,
   live: null, mapFail: false, tileFail: false, ttsErr: false, dragId: null,
   form: { name: "", krw: "", cat: "food", tax: null, cur: "KRW" },
@@ -1232,26 +1232,36 @@ function startSync() {
 
 /* 每日預報：不指定 start_date/end_date，因為超出預報範圍（16 天）API 會直接回錯誤。
    改成抓 16 天再比對行程日期，抓不到的那幾天就顯示「尚無預報」。 */
+function parseDaily(d) {
+  const dd = d && d.daily;
+  if (!dd || !Array.isArray(dd.time)) return null;
+  const out = {};
+  dd.time.forEach((iso, i) => {
+    const hi = dd.temperature_2m_max && dd.temperature_2m_max[i];
+    const lo = dd.temperature_2m_min && dd.temperature_2m_min[i];
+    const pr = dd.precipitation_probability_max && dd.precipitation_probability_max[i];
+    const wc = dd.weather_code && dd.weather_code[i];
+    if (hi == null) return;
+    out[iso] = { hi: Math.round(hi), lo: lo == null ? null : Math.round(lo), rain: pr == null ? null : Math.round(pr), code: wc };
+  });
+  return Object.keys(out).length ? out : null;
+}
+const DAILY_Q = "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&forecast_days=16";
 function fetchForecast() {
-  fetch("https://api.open-meteo.com/v1/forecast?latitude=35.18&longitude=129.08&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&forecast_days=16&timezone=Asia%2FSeoul")
+  fetch("https://api.open-meteo.com/v1/forecast?latitude=35.18&longitude=129.08" + DAILY_Q + "&timezone=Asia%2FSeoul")
     .then(r => r.json())
     .then(d => {
-      const dd = d && d.daily;
-      if (!dd || !Array.isArray(dd.time)) { state.fcState = "none"; render(); return; }
-      const out = {};
-      dd.time.forEach((iso, i) => {
-        const hi = dd.temperature_2m_max && dd.temperature_2m_max[i];
-        const lo = dd.temperature_2m_min && dd.temperature_2m_min[i];
-        const pr = dd.precipitation_probability_max && dd.precipitation_probability_max[i];
-        const wc = dd.weather_code && dd.weather_code[i];
-        if (hi == null) return;
-        out[iso] = { hi: Math.round(hi), lo: lo == null ? null : Math.round(lo), rain: pr == null ? null : Math.round(pr), code: wc };
-      });
-      state.forecast = out;
-      state.fcState = Object.keys(out).length ? "ok" : "none";
+      const out = parseDaily(d);
+      state.forecast = out || {};
+      state.fcState = out ? "ok" : "none";
       render();
     })
     .catch(() => { state.fcState = "none"; render(); });
+  /* 台北對照：單獨一支請求，失敗就不顯示對照區塊，不影響釜山預報。 */
+  fetch("https://api.open-meteo.com/v1/forecast?latitude=25.04&longitude=121.56" + DAILY_Q + "&timezone=Asia%2FTaipei")
+    .then(r => r.json())
+    .then(d => { state.fcTpe = parseDaily(d); render(); })
+    .catch(() => {});
 }
 
 /* 即時匯率（KRW → TWD）。抓不到或數值不合理就沿用手動值，不覆寫使用者的設定。 */
@@ -1694,7 +1704,7 @@ function renderTopBar() {
         </div>
       </div>
       <div style="display: flex; align-items: center; gap: 8px;">
-        <div style="display: flex; align-items: center; gap: 7px; background: #FDFEFF; border: 1px solid #CFE2EA; border-radius: 999px; padding: 6px 11px 6px 9px;">
+        <div data-act="toggleWx" role="button" aria-label="看五天天氣" style="display: flex; align-items: center; gap: 7px; background: ${state.wxOpen ? "#DDEDF4" : "#FDFEFF"}; border: 1px solid ${state.wxOpen ? "#0B6E8F" : "#CFE2EA"}; border-radius: 999px; padding: 6px 11px 6px 9px; cursor: pointer;">
           <img src="${ICONS.weather}" alt="" style="width: 26px; height: 22px; object-fit: contain;" />
           <div style="display: flex; flex-direction: column; line-height: 1.1;">
             <span style="font-size: 13px; font-weight: 500;">${wx.temp}°</span>
@@ -1707,6 +1717,7 @@ function renderTopBar() {
         </div>
       </div>
     </div>
+    ${state.wxOpen ? renderWxPanel() : ""}
     ${state.fxOpen ? (() => {
       /* fxDir 決定哪邊是輸入、哪邊是結果。
          KRW = 輸入韓圓看台幣（在店裡看標價）
@@ -1863,6 +1874,79 @@ function renderItin() {
 }
 
 function dayISO(di) { return TRIP_YEAR + "-" + DAYS[di].date.replace("/", "-"); }
+
+/* 五天天氣一覽＋台北對照。
+   對照的重點不是「哪邊熱」，而是「要帶什麼衣服」，
+   所以直接把溫差算好寫成一句話，不要讓使用者自己減。 */
+function renderWxPanel() {
+  const rows = DAYS.map((d, i) => {
+    const iso = dayISO(i);
+    const f = state.forecast && state.forecast[iso];
+    const t = state.fcTpe && state.fcTpe[iso];
+    const heavy = f && f.rain != null && f.rain >= 50;
+    const on = i === state.day;
+    const cell = f
+      ? `<span style="color: #0F3A4C; font-weight: 500;">${f.hi}°</span><span style="color: #9AA3A5;"> / ${f.lo != null ? f.lo + "°" : "—"}</span>`
+      : `<span style="color: #BCC5C6;">—</span>`;
+    const tpe = t
+      ? `<span style="color: #7E8A8C;">${t.hi}° / ${t.lo != null ? t.lo + "°" : "—"}</span>`
+      : `<span style="color: #BCC5C6;">—</span>`;
+    return `<div data-act="pickDay" data-id="${i}" style="display: grid; grid-template-columns: 52px 1fr 78px 74px; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 10px; cursor: pointer; background: ${on ? "#DDEDF4" : "transparent"};">
+      <div style="font-size: 11px; color: ${on ? "#0F3A4C" : "#7E8A8C"}; font-weight: ${on ? "500" : "400"};">D${d.n} <span style="opacity:.7;">${d.dow}</span></div>
+      <div style="font-size: 11px; color: #4A4E55; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${f ? WCODE(f.code) : "尚無預報"}</div>
+      <div style="font-size: 12px; text-align: right; font-variant-numeric: tabular-nums;">${cell}</div>
+      <div style="font-size: 11px; text-align: right; font-variant-numeric: tabular-nums;">${f && f.rain != null ? `<span style="color: ${heavy ? "#B4654A" : "#0B6E8F"};">☂ ${f.rain}%</span>` : `<span style="color:#BCC5C6;">—</span>`}</div>
+    </div>`;
+  }).join("");
+
+  const tpeRows = DAYS.map((d, i) => {
+    const iso = dayISO(i);
+    const t = state.fcTpe && state.fcTpe[iso];
+    return `<div style="display: grid; grid-template-columns: 52px 1fr 78px 74px; align-items: center; gap: 8px; padding: 7px 10px;">
+      <div style="font-size: 11px; color: #9AA3A5;">D${d.n}</div>
+      <div style="font-size: 11px; color: #9AA3A5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${t ? WCODE(t.code) : "—"}</div>
+      <div style="font-size: 12px; text-align: right; color: #7E8A8C; font-variant-numeric: tabular-nums;">${t ? t.hi + "° / " + (t.lo != null ? t.lo + "°" : "—") : "—"}</div>
+      <div style="font-size: 11px; text-align: right; color: #9AA3A5; font-variant-numeric: tabular-nums;">${t && t.rain != null ? "☂ " + t.rain + "%" : "—"}</div>
+    </div>`;
+  }).join("");
+
+  /* 出發前最想知道的一件事：釜山比台北冷幾度，要不要帶外套。
+     取兩邊都有預報的日子算平均低溫差，樣本不足就不下結論。 */
+  let diffNote = "";
+  const pairs = DAYS.map((d, i) => {
+    const iso = dayISO(i);
+    const f = state.forecast && state.forecast[iso];
+    const t = state.fcTpe && state.fcTpe[iso];
+    return (f && t && f.lo != null && t.lo != null) ? { lo: f.lo - t.lo, hi: f.hi - t.hi } : null;
+  }).filter(Boolean);
+  if (pairs.length) {
+    const dLo = Math.round(pairs.reduce((a, x) => a + x.lo, 0) / pairs.length);
+    const dHi = Math.round(pairs.reduce((a, x) => a + x.hi, 0) / pairs.length);
+    const colder = dLo <= -1;
+    const much = dLo <= -5;
+    const word = colder ? (much ? "冷很多" : "涼一點") : (dLo >= 1 ? "熱一點" : "差不多");
+    const advise = much ? "外套要帶厚一點的。" : (colder ? "早晚一件薄外套就夠。" : "穿搭跟台北差不多。");
+    diffNote = `<div style="font-size: 11px; color: #4A4E55; line-height: 1.7; margin-top: 10px; padding: 9px 11px; background: #F2F9FB; border: 1px solid #D9E8EE; border-radius: 10px;">
+      釜山比台北<span style="color: #0B6E8F; font-weight: 500;">${word}</span>：早晚低溫差 ${dLo > 0 ? "+" : ""}${dLo}°、白天高溫差 ${dHi > 0 ? "+" : ""}${dHi}°。${advise}
+    </div>`;
+  }
+
+  return `
+  <div style="padding: 0 18px 14px;">
+    <div style="background: #FDFEFF; border: 1px solid #D6E5EC; border-radius: 16px; padding: 6px 6px 10px;">
+      <div style="display: grid; grid-template-columns: 52px 1fr 78px 74px; gap: 8px; padding: 8px 10px 6px; font-size: 10px; letter-spacing: .08em; color: #9AA3A5;">
+        <div>釜山</div><div>天氣</div><div style="text-align: right;">高 / 低</div><div style="text-align: right;">降雨</div>
+      </div>
+      ${rows}
+      ${state.fcTpe ? `<div style="border-top: 1px dashed #D9E8EE; margin: 8px 10px 0; padding-top: 8px;"></div>
+      <div style="display: grid; grid-template-columns: 52px 1fr 78px 74px; gap: 8px; padding: 0 10px 4px; font-size: 10px; letter-spacing: .08em; color: #9AA3A5;">
+        <div>台北</div><div>同期對照</div><div style="text-align: right;">高 / 低</div><div style="text-align: right;">降雨</div>
+      </div>${tpeRows}` : `<div style="font-size: 11px; color: #BCC5C6; padding: 10px; text-align: center;">台北對照載入中…</div>`}
+    </div>
+    ${diffNote}
+    <div style="font-size: 10px; color: #BCC5C6; margin-top: 8px; text-align: center;">點任一列可直接跳到那一天的行程。預報只有未來 16 天。</div>
+  </div>`;
+}
 
 function renderDayForecast(di) {
   const iso = dayISO(di);
@@ -2456,7 +2540,9 @@ function onClick(e) {
      所以只有真的點到帶 data-act 的那個元素本身才關閉。 */
   if ((act === "closeBig" || act === "closeBackup") && e.target !== el) return;
   switch (act) {
-    case "toggleFx": setUI({ fxOpen: !state.fxOpen }); break;
+    /* 兩個面板互斥，不要同時展開把行程擠到畫面外 */
+    case "toggleFx": setUI({ fxOpen: !state.fxOpen, wxOpen: false }); break;
+    case "toggleWx": setUI({ wxOpen: !state.wxOpen, fxOpen: false }); break;
     case "pickFxAmt": setUI({ fxKrw: String(id) }); break;
     case "fxSwap": {
       /* 對調方向時把目前的換算結果帶到輸入格，
