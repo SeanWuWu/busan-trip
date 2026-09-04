@@ -12,7 +12,11 @@
 <title>Busan 5D4N · 釜山旅遊指南</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;1,500&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<!-- 字型非阻塞載入：離線時這支請求會一直等到逾時，
+     若當成 stylesheet 會把整頁的首次渲染一起卡住。
+     先用 media="print" 讓它不阻塞，載完再切回 all；
+     拉不到就直接用下面的系統字型備援，畫面照常出來。 -->
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;1,500&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>/* required styles */
 
 .leaflet-pane,
@@ -1685,6 +1689,38 @@ function renderNow() {
   }
 }
 
+/* 雙時區時鐘：韓國比台灣快 1 小時，兩邊都沒有夏令時間。
+   不自己算偏移量，交給 Intl 處理，避免手機時區設定奇怪時算錯。 */
+function zoneTime(tz) {
+  try {
+    return new Intl.DateTimeFormat("zh-TW", {
+      timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false
+    }).format(new Date());
+  } catch (e) {
+    return "--:--";
+  }
+}
+
+/* 時鐘自己跑，不要靠整頁 render：
+   整頁重繪會把正在輸入的欄位跟地圖一起重建，一分鐘一次太擾人。 */
+let clockTimer = null;
+function tickClock() {
+  const a = document.getElementById("clockKr");
+  const b = document.getElementById("clockTw");
+  if (a) a.textContent = zoneTime("Asia/Seoul");
+  if (b) b.textContent = zoneTime("Asia/Taipei");
+}
+function startClock() {
+  if (clockTimer) return;
+  tickClock();
+  /* 對齊到下一個整分，之後每分鐘跳一次 */
+  const ms = 60000 - (Date.now() % 60000);
+  setTimeout(() => {
+    tickClock();
+    clockTimer = setInterval(tickClock, 60000);
+  }, ms);
+}
+
 function renderTopBar() {
   const wx = state.live || WX_FALLBACK[state.day] || WX_FALLBACK[0];
   const syncLabels = { off: "本機儲存", wait: "連線中…", ok: "已同步", err: "同步失敗", unsupported: "本機儲存" };
@@ -1698,9 +1734,17 @@ function renderTopBar() {
           <span style="font-family: 'Playfair Display', serif; font-size: 21px; line-height: 1; letter-spacing: -.01em;">Busan</span>
           <span style="font-size: 12px; color: #0B6E8F; letter-spacing: .04em;">부산</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <span style="width: 6px; height: 6px; border-radius: 99px; background: ${syncDots[state.syncState] || "#C9CDD4"};"></span>
-          <span style="font-size: 9px; letter-spacing: .1em; color: #7E8A8C; text-transform: uppercase;">${syncLabels[state.syncState] || "本機儲存"}</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="display: flex; align-items: center; gap: 4px;">
+            <span style="font-size: 8px; letter-spacing: .08em; color: #9AA3A5;">韓</span>
+            <span id="clockKr" style="font-size: 12px; font-weight: 500; color: #0F3A4C; font-variant-numeric: tabular-nums;">${zoneTime("Asia/Seoul")}</span>
+          </span>
+          <span style="width: 1px; height: 9px; background: #CFE2EA;"></span>
+          <span style="display: flex; align-items: center; gap: 4px;">
+            <span style="font-size: 8px; letter-spacing: .08em; color: #9AA3A5;">台</span>
+            <span id="clockTw" style="font-size: 12px; color: #7E8A8C; font-variant-numeric: tabular-nums;">${zoneTime("Asia/Taipei")}</span>
+          </span>
+          <span style="width: 5px; height: 5px; border-radius: 99px; background: ${syncDots[state.syncState] || "#C9CDD4"}; margin-left: 2px;" title="${syncLabels[state.syncState] || "本機儲存"}"></span>
         </div>
       </div>
       <div style="display: flex; align-items: center; gap: 8px;">
@@ -2893,6 +2937,7 @@ jumpToToday();
 warmVoices();
 bindEvents();
 render();
+startClock();
 fetchWeather();
 fetchForecast();
 fetchRate();
@@ -2900,43 +2945,20 @@ if (state.syncOn) startSync();
 document.addEventListener("visibilitychange", () => { if (!document.hidden && state.syncOn) doPull(false); });
 
 /* ============================================================
-   離線支援：所有資源都內嵌在這一個 HTML，快取它就能完全離線開啟。
-   用 Blob 產生 Service Worker，不需要額外檔案（GitHub Pages 同源可用）。
+   離線支援：所有資源（Leaflet、圖示、插圖）都內嵌在這一個 HTML，
+   只要把頁面本身快取下來就能離線開啟。
+   注意：Service Worker 的腳本必須是同源的真實檔案，
+   之前用 Blob URL 註冊會被瀏覽器直接拒絕（protocol not supported），
+   離線完全沒生效，所以現在獨立成 sw.js。
    ============================================================ */
 (function registerSW() {
   if (!("serviceWorker" in navigator)) return;
-  if (location.protocol !== "https:" && location.hostname !== "localhost") return;
-  const SW = `
-    const C = "busan-guide-v1";
-    const PAGE = ${JSON.stringify(location.pathname)};
-    self.addEventListener("install", e => {
-      self.skipWaiting();
-      e.waitUntil(caches.open(C).then(c => c.add(PAGE)).catch(() => {}));
-    });
-    self.addEventListener("activate", e => {
-      e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim()));
-    });
-    self.addEventListener("fetch", e => {
-      const r = e.request;
-      if (r.method !== "GET") return;
-      const url = new URL(r.url);
-      // 只處理自己這頁；天氣、匯率、圖磚、Firebase 一律走網路，離線時自然失敗由 App 自行處理
-      if (url.origin !== location.origin) return;
-      if (r.mode === "navigate" || url.pathname === PAGE) {
-        e.respondWith(
-          fetch(r).then(res => {
-            const copy = res.clone();
-            caches.open(C).then(c => c.put(PAGE, copy)).catch(() => {});
-            return res;
-          }).catch(() => caches.match(PAGE).then(m => m || Response.error()))
-        );
-      }
-    });
-  `;
-  try {
-    const url = URL.createObjectURL(new Blob([SW], { type: "text/javascript" }));
-    navigator.serviceWorker.register(url).catch(() => {});
-  } catch (e) {}
+  /* file:// 開的頁面沒有 Service Worker，也不需要——本地檔案本來就離線可用。 */
+  if (location.protocol !== "https:" && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") return;
+  /* 必須是同源的真實檔案：瀏覽器拒絕 blob: 與 data: 協定的 SW。 */
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
 })();
 
 /* #46 手機主畫面模式下，返回鍵應該回上一個分頁而不是直接關掉 App */
